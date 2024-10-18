@@ -10,7 +10,7 @@ const session = require('express-session');
 const verificarToken = require('./app/middleware/verificarToken'); // Importar el middleware
 
 var corsOptions = {
-  origin: "http://localhost:3000"
+  origin: "https://banco-leche-front.onrender.com/"
 };
 
 app.use(cors(corsOptions));
