@@ -40,7 +40,7 @@ db.sequelize.sync()
   });
 
 app.get("/", (req, res) => {
-  res.json({ message: "FARMACIA EN LINEA." });
+  res.json({ message: "BANCO DE LECHE EN LINEA." });
 });
 
 // Rutas protegidas por JWT (todas las rutas)
