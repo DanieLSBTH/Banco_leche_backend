@@ -7,7 +7,7 @@ const sharp = require("sharp");
 const fs = require("fs");
 const app = express();
 const session = require('express-session');
-const verificarToken = require('./app/middleware/verificarToken'); // Importar el middleware
+const verificarToken = require('./app/middleware/verificarToken'); 
 
 var corsOptions = {
   origin: "https://banco-de-leche.onrender.com"
