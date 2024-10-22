@@ -415,85 +415,85 @@ exports.getResumenPorMes = async (req, res) => {
   try {
     // Consulta SQL en bruto
     const query = `
-      SET lc_time = 'es_ES';
       WITH donaciones AS (
-          SELECT 
-              TO_CHAR(dd.fecha, 'TMMonth YYYY') AS mes,
-              TO_DATE(TO_CHAR(dd.fecha, 'TMMonth YYYY'), 'TMMonth YYYY') AS fecha_ordenamiento,
-              CASE 
-                  WHEN dd.id_extrahospitalario IS NOT NULL THEN 'Extrahospitalario'
-                  ELSE 'Intrahospitalario'
-              END AS servicio_tipo,
-              COUNT(*) AS total_donaciones,
-              COUNT(DISTINCT dd.id_donadora) AS total_donadoras,
-              SUM(dd.litros) AS total_litros,
-              SUM(CASE WHEN dd.nueva THEN 1 ELSE 0 END) AS total_nuevas
-          FROM 
-              donadora_detalles dd
-          GROUP BY 
-              TO_CHAR(dd.fecha, 'TMMonth YYYY'),
-              CASE 
-                  WHEN dd.id_extrahospitalario IS NOT NULL THEN 'Extrahospitalario'
-                  ELSE 'Intrahospitalario'
-              END
-      ),
-      totales AS (
-          SELECT 
-              mes,
-              fecha_ordenamiento,
-              SUM(total_donaciones) AS total_general_donaciones,
-              SUM(total_nuevas) AS total_general_nuevas
-          FROM 
-              donaciones
-          GROUP BY mes, fecha_ordenamiento
-      ),
-      resultados_combinados AS (
-          SELECT 
-              d.mes,
-              d.fecha_ordenamiento,
-              d.servicio_tipo,
-              d.total_donaciones,
-              d.total_donadoras,
-              d.total_litros,
-              ROUND((d.total_donaciones * 100.0 / NULLIF(t.total_general_donaciones, 0)), 2) AS porcentaje_donaciones,
-              d.total_nuevas,
-              CASE 
-                  WHEN d.servicio_tipo = 'Extrahospitalario' THEN 0
-                  WHEN d.servicio_tipo = 'Intrahospitalario' THEN 1
-                  ELSE 2
-              END AS orden_tipo
-          FROM 
-              donaciones d
-          JOIN 
-              totales t ON d.mes = t.mes
-          UNION ALL
-          SELECT 
-              d.mes,
-              d.fecha_ordenamiento,
-              'TOTAL GENERAL' AS servicio_tipo,
-              SUM(d.total_donaciones) AS total_donaciones,
-              SUM(d.total_donadoras) AS total_donadoras,
-              SUM(d.total_litros) AS total_litros,
-              100 AS porcentaje_donaciones,
-              SUM(d.total_nuevas) AS total_nuevas,
-              2 AS orden_tipo
-          FROM 
-              donaciones d
-          GROUP BY d.mes, d.fecha_ordenamiento
-      )
-      SELECT 
-          mes,
-          servicio_tipo,
-          total_donaciones,
-          total_donadoras,
-          total_litros,
-          porcentaje_donaciones,
-          total_nuevas
-      FROM 
-          resultados_combinados
-      ORDER BY 
-          fecha_ordenamiento,
-          orden_tipo;
+    SELECT 
+        TO_CHAR(dd.fecha, 'TMMonth YYYY') AS mes,
+        TO_DATE(TO_CHAR(dd.fecha, 'TMMonth YYYY'), 'TMMonth YYYY') AS fecha_ordenamiento,
+        CASE 
+            WHEN dd.id_extrahospitalario IS NOT NULL THEN 'Extrahospitalario'
+            ELSE 'Intrahospitalario'
+        END AS servicio_tipo,
+        COUNT(*) AS total_donaciones,
+        COUNT(DISTINCT dd.id_donadora) AS total_donadoras,
+        SUM(dd.litros) AS total_litros,
+        SUM(CASE WHEN dd.nueva THEN 1 ELSE 0 END) AS total_nuevas
+    FROM 
+        donadora_detalles dd
+    GROUP BY 
+        TO_CHAR(dd.fecha, 'TMMonth YYYY'),
+        CASE 
+            WHEN dd.id_extrahospitalario IS NOT NULL THEN 'Extrahospitalario'
+            ELSE 'Intrahospitalario'
+        END
+),
+totales AS (
+    SELECT 
+        mes,
+        fecha_ordenamiento,
+        SUM(total_donaciones) AS total_general_donaciones,
+        SUM(total_nuevas) AS total_general_nuevas
+    FROM 
+        donaciones
+    GROUP BY mes, fecha_ordenamiento
+),
+resultados_combinados AS (
+    SELECT 
+        d.mes,
+        d.fecha_ordenamiento,
+        d.servicio_tipo,
+        d.total_donaciones,
+        d.total_donadoras,
+        d.total_litros,
+        ROUND((d.total_donaciones * 100.0 / NULLIF(t.total_general_donaciones, 0)), 2) AS porcentaje_donaciones,
+        d.total_nuevas,
+        CASE 
+            WHEN d.servicio_tipo = 'Extrahospitalario' THEN 0
+            WHEN d.servicio_tipo = 'Intrahospitalario' THEN 1
+            ELSE 2
+        END AS orden_tipo
+    FROM 
+        donaciones d
+    JOIN 
+        totales t ON d.mes = t.mes
+    UNION ALL
+    SELECT 
+        d.mes,
+        d.fecha_ordenamiento,
+        'TOTAL GENERAL' AS servicio_tipo,
+        SUM(d.total_donaciones) AS total_donaciones,
+        SUM(d.total_donadoras) AS total_donadoras,
+        SUM(d.total_litros) AS total_litros,
+        100 AS porcentaje_donaciones,
+        SUM(d.total_nuevas) AS total_nuevas,
+        2 AS orden_tipo
+    FROM 
+        donaciones d
+    GROUP BY d.mes, d.fecha_ordenamiento
+)
+SELECT 
+    mes,
+    servicio_tipo,
+    total_donaciones,
+    total_donadoras,
+    total_litros,
+    porcentaje_donaciones,
+    total_nuevas
+FROM 
+    resultados_combinados
+ORDER BY 
+    fecha_ordenamiento,
+    orden_tipo;
+
     `;
 
     // Ejecutar la consulta SQL
