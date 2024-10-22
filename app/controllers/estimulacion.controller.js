@@ -309,21 +309,20 @@ exports.getResumenEstimulacionPorRango = async (req, res) => {
     const fechaFinAjustada = `${fechaFin} 23:59:59`;
     
     const query = `
-      SET lc_time TO 'es_ES';
-      
       SELECT 
-        TO_CHAR(fecha, 'TMMonth YYYY') AS mes,  -- Formatea el mes como texto (ej. "Septiembre 2024")
-        COUNT(*) AS total_estimulaciones,
-        COUNT(CASE WHEN constante = true THEN 1 END) AS total_constantes,
-        COUNT(CASE WHEN nueva = true THEN 1 END) AS total_nuevas
-      FROM 
-        public.estimulacions
-      WHERE 
-        fecha BETWEEN :fechaInicio AND :fechaFinAjustada  -- Filtrar por el rango de fechas proporcionado por el usuario
-      GROUP BY 
-        mes
-      ORDER BY 
-        MIN(fecha);
+  TO_CHAR(fecha, 'TMMonth YYYY') AS mes,  -- Esto ya convierte el mes a texto (en inglés por defecto)
+  COUNT(*) AS total_estimulaciones,
+  COUNT(CASE WHEN constante = true THEN 1 END) AS total_constantes,
+  COUNT(CASE WHEN nueva = true THEN 1 END) AS total_nuevas
+FROM 
+  public.estimulacions
+WHERE 
+  fecha BETWEEN :fechaInicio AND :fechaFinAjustada  -- Filtrar por el rango de fechas proporcionado por el usuario
+GROUP BY 
+  mes
+ORDER BY 
+  MIN(fecha);
+
     `;
 
     const resumen = await db.sequelize.query(query, {
