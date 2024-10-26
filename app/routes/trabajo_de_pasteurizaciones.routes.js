@@ -11,7 +11,7 @@ module.exports = app => {
 
   
     
-    router.get('/metrics', trabajoDePasteurizaciones.getMetrics);
+    router.get('/getStatsByDateRange', trabajoDePasteurizaciones.getStatsByDateRange);
     
     // Recuperar un solo registro de trabajo_de_pasteurizaciones por ID
     router.get('/:id_pasteurizacion', trabajoDePasteurizaciones.findOne);

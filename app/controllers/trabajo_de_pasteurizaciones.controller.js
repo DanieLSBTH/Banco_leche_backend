@@ -254,53 +254,33 @@ exports.deleteAll = (req, res) => {
     });
 };
 
-exports.getMetrics = async (req, res) => {
+// Obtener estadísticas de pasteurización entre fechas
+exports.getStatsByDateRange = async (req, res) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
 
+    // Validar que se proporcionaron ambas fechas
     if (!fechaInicio || !fechaFin) {
-      return res.status(400).json({ message: "Se requieren fechaInicio y fechaFin" });
+      return res.status(400).send({
+        message: 'Se requieren fechaInicio y fechaFin para la consulta',
+      });
     }
 
+    // Convertir las fechas y asegurar que fechaInicio empiece a las 00:00:00
+    // y fechaFin termine a las 23:59:59
     const startDate = new Date(fechaInicio);
+    startDate.setHours(0, 0, 0, 0);
+    
     const endDate = new Date(fechaFin);
     endDate.setHours(23, 59, 59, 999);
 
-    const totalLechePasteurizada = await ControlDeLeche.sum('volumen_ml_onza', {
-      where: {
-        fecha_almacenamiento: {
-          [Op.between]: [startDate, endDate]
-        }
-      }
-    }) / 1000 || 0;
-
-    const promedioValorEnergetico = await TrabajoDePasteurizaciones.findOne({
-      attributes: [[Sequelize.fn('AVG', Sequelize.col('kcal_l')), 'promedio_kcal_l']],
-      where: {
-        fecha: {
-          [Op.between]: [startDate, endDate]
-        }
-      },
-      raw: true
-    });
-
-    const stockSinAcidezDornic = await ControlDeLeche.sum('volumen_ml_onza', {
-      include: [{
-        model: TrabajoDePasteurizaciones,
-        as: 'trabajo_de_pasteurizaciones',
-        attributes: [],
-        where: {
-          acidez: 0
-        }
-      }],
-      where: {
-        fecha_almacenamiento: {
-          [Op.between]: [startDate, endDate]
-        }
-      }
-    }) / 1000 || 0;
-
-    const numeroCrematocritos = await TrabajoDePasteurizaciones.count({
+    // Realizar la consulta con Sequelize
+    const results = await TrabajoDePasteurizaciones.findOne({
+      attributes: [
+        [Sequelize.fn('AVG', Sequelize.col('kcal_l')), 'promedio_kcal_l'],
+        [Sequelize.fn('SUM', Sequelize.col('acidez')), 'total_acidez'],
+        [Sequelize.fn('COUNT', Sequelize.col('id_pasteurizacion')), 'total_registros']
+      ],
       where: {
         fecha: {
           [Op.between]: [startDate, endDate]
@@ -308,17 +288,30 @@ exports.getMetrics = async (req, res) => {
       }
     });
 
-    res.json({
-      totalLechePasteurizadaLitros: Number(totalLechePasteurizada.toFixed(2)),
-      promedioValorEnergeticoKcalL: promedioValorEnergetico?.promedio_kcal_l 
-        ? Number(promedioValorEnergetico.promedio_kcal_l.toFixed(2)) 
-        : 0,
-      stockLecheSinAcidezDornicLitros: Number(stockSinAcidezDornic.toFixed(2)),
-      numeroCrematocritos
-    });
+    // Si no hay resultados, devolver valores en cero
+    if (!results) {
+      return res.send({
+        promedio_kcal_l: 0,
+        total_acidez: 0,
+        total_registros: 0
+        
+      });
+    }
 
-  } catch (error) {
-    console.error('Error al obtener métricas:', error);
-    res.status(500).json({ message: 'Error al obtener métricas', error: error.message });
+    // Formatear los resultados
+    const stats = {
+      promedio_kcal_l: Number(results.getDataValue('promedio_kcal_l') || 0).toFixed(2),
+      total_acidez: Number(results.getDataValue('total_acidez') || 0).toFixed(2),
+      total_registros: Number(results.getDataValue('total_registros') || 0),
+     
+    };
+
+    res.send(stats);
+
+  } catch (err) {
+    res.status(500).send({
+      message: err.message || 'Error al obtener las estadísticas de pasteurización.',
+      error: err
+    });
   }
 };

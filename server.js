@@ -45,37 +45,11 @@ app.get("/", (req, res) => {
 
 // Rutas protegidas por JWT (todas las rutas)
 const usuarioRoutes = require('./app/routes/usuario.routes');
-const productoRoutes = require('./app/routes/producto.routes');
 
 // Proteger todas las rutas a continuación
 app.use('/api/usuarios', usuarioRoutes);
-app.use('/api/productos', verificarToken, productoRoutes);
 
 // Otras rutas protegidas
-require("./app/routes/turorial.routes")(app);
-app.use('/api/tutoriales', verificarToken, require("./app/routes/turorial.routes"));
-
-require("./app/routes/cliente.routes")(app);
-app.use('/api/clientes', verificarToken, require("./app/routes/cliente.routes"));
-
-require("./app/routes/empleado.routes")(app);
-app.use('/api/empleados', verificarToken, require("./app/routes/empleado.routes"));
-
-require("./app/routes/proveedor.routes")(app);
-app.use('/api/proveedores', verificarToken, require("./app/routes/proveedor.routes"));
-
-require("./app/routes/factura.routes")(app);
-app.use('/api/facturas', verificarToken, require("./app/routes/factura.routes"));
-
-require("./app/routes/factura_detalle.routes")(app);
-app.use('/api/factura_detalle', verificarToken, require("./app/routes/factura_detalle.routes"));
-
-require("./app/routes/carrito.routes")(app);
-app.use('/api/carritos', verificarToken, require("./app/routes/carrito.routes"));
-
-require("./app/routes/carrito_detalle.routes")(app);
-app.use('/api/carrito_detalle', verificarToken, require("./app/routes/carrito_detalle.routes"));
-
 require("./app/routes/personal.routes")(app);
 app.use('/api/personal', verificarToken, require("./app/routes/personal.routes"));
 
@@ -102,9 +76,6 @@ app.use('/api/donadora', verificarToken, require("./app/routes/donadora.routes")
 
 require("./app/routes/donadora_detalle.routes")(app);
 app.use('/api/donadora_detalle', verificarToken, require("./app/routes/donadora_detalle.routes"));
-
-require("./app/routes/chat_1respuestas.routes")(app);
-app.use('/api/chat_1respuestas', verificarToken, require("./app/routes/chat_1respuestas.routes"));
 
 require("./app/routes/trabajo_de_pasteurizaciones.routes")(app);
 app.use('/api/trabajo_de_pasteurizaciones', verificarToken, require("./app/routes/trabajo_de_pasteurizaciones.routes"));
