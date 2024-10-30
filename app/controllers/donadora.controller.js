@@ -32,37 +32,40 @@ exports.create = (req, res) => {
 };
 
 // Recuperar todos los registros de Donadora de la base de datos con paginación
+// Recuperar todos los registros de Donadora de la base de datos con o sin paginación
 exports.findAll = (req, res) => {
   const nombre = req.query.nombre;
-  const page = parseInt(req.query.page) || 1; // Página actual, por defecto 1
-  const limit = parseInt(req.query.limit) || 10; // Límite de registros por página, por defecto 10
+  const page = req.query.page ? parseInt(req.query.page) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit) : null;
 
-  // Calcular el offset para la paginación
-  const offset = (page - 1) * limit;
-
+  // Calcular el offset solo si la paginación está activa
+  const offset = page && limit ? (page - 1) * limit : null;
+  
   let condition = nombre ? { nombre: { [Op.iLike]: `%${nombre}%` } } : null;
 
   // Contar el total de registros
   Donadora.count({ where: condition })
     .then(totalRecords => {
-      // Encontrar los registros con paginación
-      return Donadora.findAll({
+      // Si no hay paginación, obtener todos los registros
+      const queryOptions = {
         where: condition,
-        limit: limit,
-        offset: offset,
-      }).then(data => {
-        const totalPages = Math.ceil(totalRecords / limit); // Calcular el total de páginas
+        ...(limit ? { limit } : {}),  // Solo se aplica el límite si está presente
+        ...(offset ? { offset } : {}) // Solo se aplica el offset si está presente
+      };
+
+      return Donadora.findAll(queryOptions).then(data => {
+        const totalPages = limit ? Math.ceil(totalRecords / limit) : 1;
         res.send({
           donadoras: data,
           totalRecords: totalRecords,
-          currentPage: page,
-          totalPages: totalPages,
+          currentPage: page || 1,
+          totalPages: totalPages
         });
       });
     })
     .catch(err => {
       res.status(500).send({
-        message: err.message || 'Ocurrió un error al recuperar los registros de Donadora.',
+        message: err.message || 'Ocurrió un error al recuperar los registros de Donadora.'
       });
     });
 };
