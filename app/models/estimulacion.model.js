@@ -5,16 +5,16 @@ module.exports = (sequelize, Sequelize) => {
       primaryKey: true,
       autoIncrement: true,
     },
-    nombre: {
-      type: Sequelize.STRING(255),
-    },
-    apellido: {
-      type: Sequelize.STRING(255),
+    id_personal_estimulacion: {  // Cambio de id_personal a id_personal_estimulacion
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      
     },
     fecha: {
       type: Sequelize.DATE,
-      defaultValue: Sequelize.NOW, 
+      allowNull: false,
     },
+    
     id_intrahospitalario: {
       type: Sequelize.INTEGER,
     },
@@ -24,21 +24,23 @@ module.exports = (sequelize, Sequelize) => {
     nueva: {
       type: Sequelize.BOOLEAN,
     },
-    id_personal: {
+    id_personal_estimulacion: {  // Cambio de id_personal a id_personal_estimulacion
       type: Sequelize.INTEGER,
+      allowNull: false,
+      
     },
   });
 
-  // Definir la relación con la tabla de Servicio Intrahospitalario
+  // Relación con Servicio Intrahospitalario
   Estimulacion.belongsTo(sequelize.models.servicio_in, {
     foreignKey: 'id_intrahospitalario',
     as: 'servicio_ins',
   });
 
-  // Definir la relación con la tabla de Personal
-  Estimulacion.belongsTo(sequelize.models.personal, {
-    foreignKey: 'id_personal',
-    as: 'personals',
+  // Relación con Personal_estimulacion
+  Estimulacion.belongsTo(sequelize.models.personal_estimulaciones, {
+    foreignKey: 'id_personal_estimulacion',
+    as: 'personal_estimulaciones',
   });
 
   return Estimulacion;

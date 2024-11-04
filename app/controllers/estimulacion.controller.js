@@ -4,12 +4,19 @@ const Sequelize = require('sequelize');
 const { QueryTypes } = require('sequelize');
 const Op = Sequelize.Op;
 
+const parseFecha = (fecha) => {
+  const [day, month, year] = fecha.split('/');
+  return new Date(`${year}-${month}-${day}`);
+};
+const { literal, fn, col } = require('sequelize');
+
+
 // Crear y guardar un nuevo registro en estimulacion
 exports.create = (req, res) => {
-  const { nombre, apellido, id_intrahospitalario, constante, nueva, id_personal } = req.body;
+  const { id_personal_estimulacion, fecha, id_intrahospitalario, constante, nueva  } = req.body;
 
   // Verificar que todos los campos requeridos estén presentes
-  if (!nombre || !apellido  || !id_intrahospitalario || typeof constante === 'undefined' || typeof nueva === 'undefined' || !id_personal) {
+  if (!id_personal_estimulacion || !fecha || !id_intrahospitalario || typeof constante === 'undefined' || typeof nueva === 'undefined' ) {
     res.status(400).send({
       message: 'Todos los campos son obligatorios.',
     });
@@ -18,12 +25,12 @@ exports.create = (req, res) => {
 
   // Crear un registro en estimulacion
   Estimulacion.create({
-    nombre,
-    apellido,
+    id_personal_estimulacion,
+    fecha: parseFecha(fecha),
     id_intrahospitalario,
     constante,
     nueva,
-    id_personal,
+    
   })
     .then((data) => {
       res.send(data);
@@ -35,15 +42,19 @@ exports.create = (req, res) => {
     });
 };
 
-// Recuperar todos los registros de estimulacion de la base de datos
+// Recuperar todos los registros de estimulacion con paginación
 exports.findAll = (req, res) => {
-  const nombre = req.query.nombre;
+  const { page = 1, pageSize = 10 } = req.query; // Página y tamaño de página
+  const id_personal_estimulacion = req.query.id_personal_estimulacion;
   const mesActual = req.query.mesActual === 'true';
+  const offset = (page - 1) * pageSize; // Calcula el desplazamiento
+  const limit = parseInt(pageSize, 10); // Limite de registros por página
 
   let condition = {};
 
-  if (nombre) {
-    condition.nombre = { [Op.iLike]: `%${nombre}%` };
+  if (id_personal_estimulacion) {
+    condition.id_personal_estimulacion = { [Op.eq]: id_personal_estimulacion };
+  
   }
 
   if (mesActual) {
@@ -52,19 +63,27 @@ exports.findAll = (req, res) => {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     condition.fecha = {
-      [Op.between]: [startOfMonth, endOfMonth]
+      [Op.between]: [startOfMonth, endOfMonth],
     };
   }
 
-  Estimulacion.findAll({
+  Estimulacion.findAndCountAll({
     where: condition,
     include: [
       { model: db.servicio_in, as: 'servicio_ins' },
-      { model: db.personal, as: 'personals' },
+      { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
     ],
+    limit: limit, // Límite por página
+    offset: offset, // Desplazamiento por página
+    order: [['id_estimulacion', 'DESC']], // Ordenar por id_estimulacion en orden descendente
   })
-    .then((data) => {
-      res.send(data);
+    .then((result) => {
+      res.send({
+        estimulaciones: result.rows, // Registros actuales
+        totalRecords: result.count, // Total de registros
+        currentPage: parseInt(page, 10), // Página actual
+        totalPages: Math.ceil(result.count / limit), // Total de páginas
+      });
     })
     .catch((err) => {
       res.status(500).send({
@@ -80,7 +99,7 @@ exports.findOne = (req, res) => {
   Estimulacion.findByPk(id_estimulacion, {
     include: [
       { model: db.servicio_in, as: 'servicio_ins' },
-      { model: db.personal, as: 'personals' },
+      { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
     ],
   })
     .then((data) => {
@@ -166,6 +185,264 @@ exports.deleteAll = (req, res) => {
       });
     });
 };
+
+exports.getEstadisticasPorFechas = async (req, res) => {
+  const { fechaInicio, fechaFin } = req.query;
+
+  if (!fechaInicio || !fechaFin) {
+    return res.status(400).send({ message: 'Las fechas de inicio y fin son requeridas.' });
+  }
+
+  try {
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
+      return res.status(400).send({ message: 'Formato de fecha inválido' });
+    }
+
+    const dateCondition = {
+      fecha: {
+        [Op.between]: [inicio, fin],
+      },
+    };
+
+    // Total de estimulaciones (este sí debe contar todas)
+    const totalEstimulaciones = await db.estimulacion.count({
+      where: dateCondition,
+    });
+
+    // Consulta para nuevas - contando una vez por persona
+    const nuevasUnicas = await db.estimulacion.findAll({
+      where: {
+        ...dateCondition,
+        nueva: true
+      },
+      attributes: [
+        'id_personal_estimulacion',
+        [Sequelize.fn('MIN', Sequelize.col('id_estimulacion')), 'primera_estimulacion']
+      ],
+      group: ['id_personal_estimulacion']
+    });
+
+    // Consulta para constantes - contando una vez por persona
+    const constantesUnicas = await db.estimulacion.findAll({
+      where: {
+        ...dateCondition,
+        constante: true
+      },
+      attributes: [
+        'id_personal_estimulacion',
+        [Sequelize.fn('MIN', Sequelize.col('id_estimulacion')), 'primera_estimulacion']
+      ],
+      group: ['id_personal_estimulacion']
+    });
+
+    // Total por servicio
+    const totalPorServicio = await db.estimulacion.findAll({
+      where: dateCondition,
+      attributes: [
+        [Sequelize.col('estimulacion.id_intrahospitalario'), 'id_intrahospitalario'],
+        [Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'total']
+      ],
+      include: [{
+        model: db.servicio_in,
+        as: 'servicio_ins',
+        attributes: ['servicio'],
+        required: true
+      }],
+      group: [
+        'estimulacion.id_intrahospitalario',
+        'servicio_ins.id_intrahospitalario',
+        'servicio_ins.servicio'
+      ],
+      order: [[Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'DESC']]
+    });
+
+    // Total de personas distintas
+    const totalPersonas = await db.estimulacion.count({
+      where: dateCondition,
+      distinct: true,
+      col: 'id_personal_estimulacion',
+    });
+
+    // Formatear totales por servicio
+    const formattedTotalPorServicio = totalPorServicio.map(servicio => ({
+      id_intrahospitalario: servicio.id_intrahospitalario,
+      total: parseInt(servicio.get('total')),
+      servicio_ins: servicio.servicio_ins
+    }));
+
+    // Respuesta
+    res.send({
+      totalEstimulaciones,
+      totalNuevas: nuevasUnicas.length,        // Conteo único de personas con nuevas
+      totalConstantes: constantesUnicas.length, // Conteo único de personas con constantes
+      totalPorServicio: formattedTotalPorServicio,
+      totalPersonas,
+    });
+
+  } catch (error) {
+    console.error('Error en getEstadisticasPorFechas:', error);
+    res.status(500).send({ 
+      message: 'Error al recuperar las estadísticas de estimulaciones.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Nueva función para búsqueda detallada por id_personal_estimulacion
+exports.findDetailsById = async (req, res) => {
+  const { id_personal_estimulacion } = req.query;
+
+  if (!id_personal_estimulacion) {
+    return res.status(400).send({
+      message: 'El ID de la persona es requerido para la búsqueda.'
+    });
+  }
+
+  try {
+    // Buscar todas las estimulaciones relacionadas con el id_personal_estimulacion
+    const resultados = await db.estimulacion.findAll({
+      include: [
+        {
+          model: db.personal_estimulaciones,
+          as: 'personal_estimulaciones',
+          where: {
+            id_personal_estimulacion: id_personal_estimulacion
+          },
+          attributes: ['id_personal_estimulacion', 'nombre', 'apellido']
+        },
+        {
+          model: db.servicio_in,
+          as: 'servicio_ins',
+          attributes: ['servicio']
+        }
+      ],
+      order: [['fecha', 'ASC']] // Ordenar por fecha ascendente
+    });
+
+    if (!resultados.length) {
+      return res.status(404).send({
+        message: 'No se encontraron registros para este ID.'
+      });
+    }
+
+    // Agrupar los datos por persona
+    const personasMap = new Map();
+
+    resultados.forEach(estimulacion => {
+      const persona = estimulacion.personal_estimulaciones;
+      const idPersona = persona.id_personal_estimulacion;
+
+      if (!personasMap.has(idPersona)) {
+        personasMap.set(idPersona, {
+          informacion_personal: {
+            id: persona.id_personal_estimulacion,
+            nombre: persona.nombre,
+            apellido: persona.apellido,
+          },
+          resumen: {
+            total_visitas: 0,
+            primera_visita: null,
+            ultima_visita: null,
+            total_nuevas: 0,
+            total_constantes: 0,
+            servicios_visitados: new Set()
+          },
+          visitas: []
+        });
+      }
+
+      const personaData = personasMap.get(idPersona);
+      
+      // Actualizar resumen
+      personaData.resumen.total_visitas++;
+      if (estimulacion.nueva) personaData.resumen.total_nuevas++;
+      if (estimulacion.constante) personaData.resumen.total_constantes++;
+      personaData.resumen.servicios_visitados.add(estimulacion.servicio_ins.servicio);
+      
+      // Actualizar primera y última visita
+      const fechaVisita = estimulacion.fecha;
+      if (!personaData.resumen.primera_visita || fechaVisita < personaData.resumen.primera_visita) {
+        personaData.resumen.primera_visita = fechaVisita;
+      }
+      if (!personaData.resumen.ultima_visita || fechaVisita > personaData.resumen.ultima_visita) {
+        personaData.resumen.ultima_visita = fechaVisita;
+      }
+
+      // Agregar detalle de la visita
+      personaData.visitas.push({
+        fecha: estimulacion.fecha,
+        servicio: estimulacion.servicio_ins.servicio,
+        tipo: {
+          nueva: estimulacion.nueva,
+          constante: estimulacion.constante
+        },
+        id_estimulacion: estimulacion.id_estimulacion
+      });
+    });
+
+    // Convertir el Map a un array y formatear los datos finales
+    const resultadosFormateados = Array.from(personasMap.values()).map(persona => ({
+      ...persona,
+      resumen: {
+        ...persona.resumen,
+        servicios_visitados: Array.from(persona.resumen.servicios_visitados),
+        primera_visita: persona.resumen.primera_visita.toLocaleDateString(),
+        ultima_visita: persona.resumen.ultima_visita.toLocaleDateString(),
+        dias_desde_ultima_visita: Math.floor(
+          (new Date() - persona.resumen.ultima_visita) / (1000 * 60 * 60 * 24)
+        )
+      },
+      visitas: persona.visitas.map(visita => ({
+        ...visita,
+        fecha: visita.fecha.toLocaleDateString()
+      }))
+    }));
+
+    // Calcular estadísticas adicionales
+    const estadisticasGenerales = {
+      total_personas_encontradas: resultadosFormateados.length,
+      promedio_visitas_por_persona: (resultadosFormateados
+        .reduce((acc, persona) => acc + persona.resumen.total_visitas, 0) / resultadosFormateados.length
+      ).toFixed(2),
+      servicios_mas_frecuentes: obtenerServiciosMasFrecuentes(resultadosFormateados)
+    };
+
+    res.send({
+      estadisticas_generales: estadisticasGenerales,
+      resultados: resultadosFormateados
+    });
+
+  } catch (error) {
+    console.error('Error en findDetailsById:', error);
+    res.status(500).send({
+      message: 'Error al buscar los detalles por ID.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Función auxiliar para calcular servicios más frecuentes
+function obtenerServiciosMasFrecuentes(resultados) {
+  const serviciosCount = {};
+  
+  resultados.forEach(persona => {
+    persona.visitas.forEach(visita => {
+      serviciosCount[visita.servicio] = (serviciosCount[visita.servicio] || 0) + 1;
+    });
+  });
+
+  return Object.entries(serviciosCount)
+    .sort(([,a], [,b]) => b - a)
+    .reduce((acc, [servicio, count]) => {
+      acc[servicio] = count;
+      return acc;
+    }, {});
+}
+
 
 exports.getAsistencias = async (req, res) => {
   try {

@@ -62,6 +62,9 @@ app.use('/api/servicio_extrahospitalario', verificarToken, require("./app/routes
 require("./app/routes/estimulacion.routes")(app);
 app.use('/api/estimulacion', verificarToken, require("./app/routes/estimulacion.routes"));
 
+require("./app/routes/personal_estimulaciones.routes")(app);
+app.use('/api/personal_estimulacion', verificarToken, require("./app/routes/personal_estimulaciones.routes"));
+
 require("./app/routes/chat_temas.routes")(app);
 app.use('/api/chat_temas', verificarToken, require("./app/routes/chat_temas.routes"));
 

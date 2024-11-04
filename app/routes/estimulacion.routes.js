@@ -13,7 +13,11 @@ module.exports = (app) => {
     // Nueva ruta para obtener el resumen de estimulacion
     router.get('/resumen', estimulacion.getResumenEstimulacion);
     // Nueva ruta para obtener el resumen de estimulacion por mes
+    router.get('/buscar/id_personal_estimulacion', estimulacion.findDetailsById); // Nueva ruta de búsqueda por nombre
+  
     router.get('/resumen_mensual',estimulacion.getResumenEstimulacionMensual);
+    //nueva ruta de resumen 
+    router.get('/estimulacion-resumen',estimulacion. getEstadisticasPorFechas);
     //nueva ruta
     router.get('/resumen_estimulacion',estimulacion.getResumen_Estimulacion_Mensual);
     // Recuperar datos por rango fecha

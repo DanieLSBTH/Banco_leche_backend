@@ -512,3 +512,312 @@ ORDER BY
     });
   }
 };
+
+
+
+// Nueva función para búsqueda detallada por nombre de donadora
+exports.findDetailsByName = async (req, res) => {
+  const { id_donadora } = req.query;
+
+  if (!id_donadora) {
+    return res.status(400).send({
+      message: 'El id_donadora es requerido para la búsqueda.'
+    });
+  }
+
+  try {
+    // Buscar todas las donaciones relacionadas con el nombre
+    const resultados = await DonadoraDetalle.findAll({
+      include: [
+        {
+          model: db.donadoras,
+          as: 'donadoras',
+          where: {
+            id_donadora: id_donadora
+          },
+          attributes: ['id_donadora', 'nombre', 'apellido']
+        },
+        {
+          model: db.servicio_ex,
+          as: 'servicio_exes',
+          attributes: ['servicio']
+        },
+        {
+          model: db.servicio_in,
+          as: 'servicio_ins',
+          attributes: ['servicio']
+        },
+        {
+          model: db.personal,
+          as: 'personals',
+          attributes: ['nombre']
+        }
+      ],
+      order: [['fecha', 'ASC']]
+    });
+
+    if (!resultados.length) {
+      return res.status(404).send({
+        message: 'No se encontraron registros para esta donadora.'
+      });
+    }
+
+    // Agrupar los datos por donadora
+    const donadorasMap = new Map();
+
+    resultados.forEach(donacion => {
+      const donadora = donacion.donadoras;
+      const idDonadora = donadora.id_donadora;
+
+      if (!donadorasMap.has(idDonadora)) {
+        donadorasMap.set(idDonadora, {
+          informacion_personal: {
+            id: donadora.id_donadora,
+            nombre: donadora.nombre,
+            apellido: donadora.apellido
+          },
+          resumen: {
+            total_donaciones: 0,
+            primera_donacion: null,
+            ultima_donacion: null,
+            total_nuevas: 0,
+            total_constantes: 0,
+            total_onzas: 0,
+            total_litros: 0,
+            servicios_visitados: new Set(),
+            personal_atendio: new Set()
+          },
+          donaciones: []
+        });
+      }
+
+      const donadoraData = donadorasMap.get(idDonadora);
+      
+      // Actualizar resumen
+      donadoraData.resumen.total_donaciones++;
+      if (donacion.nueva) donadoraData.resumen.total_nuevas++;
+      if (donacion.constante) donadoraData.resumen.total_constantes++;
+      donadoraData.resumen.total_onzas += parseFloat(donacion.onzas || 0);
+      donadoraData.resumen.total_litros += parseFloat(donacion.onzas || 0) * 0.03;
+      
+      // Agregar servicios y personal
+      if (donacion.servicio_ins) {
+        donadoraData.resumen.servicios_visitados.add(donacion.servicio_ins.servicio);
+      }
+      if (donacion.servicio_exes) {
+        donadoraData.resumen.servicios_visitados.add(donacion.servicio_exes.servicio);
+      }
+      if (donacion.personals) {
+        donadoraData.resumen.personal_atendio.add(donacion.personals.nombre);
+      }
+      
+      // Actualizar primera y última donación
+      const fechaDonacion = donacion.fecha;
+      if (!donadoraData.resumen.primera_donacion || fechaDonacion < donadoraData.resumen.primera_donacion) {
+        donadoraData.resumen.primera_donacion = fechaDonacion;
+      }
+      if (!donadoraData.resumen.ultima_donacion || fechaDonacion > donadoraData.resumen.ultima_donacion) {
+        donadoraData.resumen.ultima_donacion = fechaDonacion;
+      }
+
+      // Agregar detalle de la donación
+      donadoraData.donaciones.push({
+        id_donadora_detalle: donacion.id_donadora_detalle,
+        fecha: donacion.fecha,
+        no_frasco: donacion.no_frasco,
+        onzas: donacion.onzas,
+        litros: parseFloat(donacion.onzas || 0) * 0.03,
+        servicio: donacion.servicio_ins ? donacion.servicio_ins.servicio : 
+                 donacion.servicio_exes ? donacion.servicio_exes.servicio : null,
+        tipo_servicio: donacion.servicio_ins ? 'Intrahospitalario' : 'Extrahospitalario',
+        personal_atendio: donacion.personals ? donacion.personals.nombre : null,
+        tipo: {
+          nueva: donacion.nueva,
+          constante: donacion.constante
+        }
+      });
+    });
+
+    // Convertir el Map a un array y formatear los datos finales
+    const resultadosFormateados = Array.from(donadorasMap.values()).map(donadora => ({
+      ...donadora,
+      resumen: {
+        ...donadora.resumen,
+        servicios_visitados: Array.from(donadora.resumen.servicios_visitados),
+        personal_atendio: Array.from(donadora.resumen.personal_atendio),
+        primera_donacion: donadora.resumen.primera_donacion.toLocaleDateString(),
+        ultima_donacion: donadora.resumen.ultima_donacion.toLocaleDateString(),
+        total_onzas: parseFloat(donadora.resumen.total_onzas.toFixed(2)),
+        total_litros: parseFloat(donadora.resumen.total_litros.toFixed(2)),
+        dias_desde_ultima_donacion: Math.floor(
+          (new Date() - donadora.resumen.ultima_donacion) / (1000 * 60 * 60 * 24)
+        ),
+        promedio_onzas_por_donacion: parseFloat((donadora.resumen.total_onzas / donadora.resumen.total_donaciones).toFixed(2))
+      },
+      donaciones: donadora.donaciones.map(donacion => ({
+        ...donacion,
+        fecha: donacion.fecha.toLocaleDateString()
+      }))
+    }));
+
+    // Calcular estadísticas adicionales
+    const estadisticasGenerales = {
+      total_donadoras_encontradas: resultadosFormateados.length,
+      total_donaciones: resultadosFormateados.reduce((acc, donadora) => 
+        acc + donadora.resumen.total_donaciones, 0),
+      promedio_donaciones_por_donadora: (resultadosFormateados
+        .reduce((acc, donadora) => acc + donadora.resumen.total_donaciones, 0) / 
+        resultadosFormateados.length).toFixed(2),
+      total_onzas_recolectadas: resultadosFormateados
+        .reduce((acc, donadora) => acc + donadora.resumen.total_onzas, 0).toFixed(2),
+      total_litros_recolectados: resultadosFormateados
+        .reduce((acc, donadora) => acc + donadora.resumen.total_litros, 0).toFixed(2),
+      servicios_mas_frecuentes: obtenerServiciosMasFrecuentes(resultadosFormateados)
+    };
+
+    res.send({
+      estadisticas_generales: estadisticasGenerales,
+      resultados: resultadosFormateados
+    });
+
+  } catch (error) {
+    console.error('Error en findDetailsByName:', error);
+    res.status(500).send({
+      message: 'Error al buscar los detalles por nombre.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Función auxiliar para calcular servicios más frecuentes
+function obtenerServiciosMasFrecuentes(resultados) {
+  const serviciosCount = {};
+  
+  resultados.forEach(donadora => {
+    donadora.donaciones.forEach(donacion => {
+      if (donacion.servicio) {
+        serviciosCount[donacion.servicio] = (serviciosCount[donacion.servicio] || 0) + 1;
+      }
+    });
+  });
+
+  return Object.entries(serviciosCount)
+    .sort(([,a], [,b]) => b - a)
+    .reduce((acc, [servicio, count]) => {
+      acc[servicio] = count;
+      return acc;
+    }, {});
+}
+
+// Obtener estadísticas de donaciones
+exports.getStats = async (req, res) => {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    let dateCondition = '';
+
+    // Si se proporcionan fechas, añadir condición
+    if (fecha_inicio && fecha_fin) {
+      dateCondition = `WHERE fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'`;
+    }
+
+    // Consulta para obtener estadísticas generales
+    const statsQuery = `
+      SELECT 
+        COUNT(DISTINCT id_donadora) as total_donadoras,
+        COUNT(id_donadora_detalle) as total_donaciones,
+        ROUND(SUM(onzas * 0.03), 2) as total_litros
+      FROM donadora_detalles
+      ${dateCondition}
+    `;
+
+    // Subconsultas separadas para contar donadoras nuevas y constantes
+    const nuevasQuery = `
+      SELECT COUNT(DISTINCT id_donadora) as total_nuevas
+      FROM donadora_detalles
+      WHERE nueva = true
+      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'` : ''}
+    `;
+
+    const constantesQuery = `
+      SELECT COUNT(DISTINCT id_donadora) as total_constantes
+      FROM donadora_detalles
+      WHERE constante = true
+      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'` : ''}
+    `;
+
+    // Consulta para obtener litros, donadoras, donaciones, nuevas y constantes por servicio extrahospitalario
+    const servicioExQuery = `
+      SELECT 
+        se.servicio,
+        COUNT(DISTINCT dd.id_donadora) as total_donadoras,
+        COUNT(dd.id_donadora_detalle) as total_donaciones,
+        ROUND(SUM(dd.onzas * 0.03), 2) as litros,
+        COUNT(DISTINCT CASE WHEN dd.nueva = true THEN dd.id_donadora END) as nuevas,
+        COUNT(DISTINCT CASE WHEN dd.constante = true THEN dd.id_donadora END) as constantes
+      FROM donadora_detalles dd
+      JOIN servicio_exes se ON dd.id_extrahospitalario = se.id_extrahospitalario
+      ${dateCondition}
+      GROUP BY se.servicio
+      ORDER BY litros DESC
+    `;
+
+    // Consulta para obtener litros, donadoras, donaciones, nuevas y constantes por servicio intrahospitalario
+    const servicioInQuery = `
+      SELECT 
+        si.servicio,
+        COUNT(DISTINCT dd.id_donadora) as total_donadoras,
+        COUNT(dd.id_donadora_detalle) as total_donaciones,
+        ROUND(SUM(dd.onzas * 0.03), 2) as litros,
+        COUNT(DISTINCT CASE WHEN dd.nueva = true THEN dd.id_donadora END) as nuevas,
+        COUNT(DISTINCT CASE WHEN dd.constante = true THEN dd.id_donadora END) as constantes
+      FROM donadora_detalles dd
+      JOIN servicio_ins si ON dd.id_intrahospitalario = si.id_intrahospitalario
+      ${dateCondition}
+      GROUP BY si.servicio
+      ORDER BY litros DESC
+    `;
+
+    // Ejecutar todas las consultas
+    const [statsResult, nuevasResult, constantesResult, servicioExResult, servicioInResult] = await Promise.all([
+      sequelize.query(statsQuery, { type: QueryTypes.SELECT }),
+      sequelize.query(nuevasQuery, { type: QueryTypes.SELECT }),
+      sequelize.query(constantesQuery, { type: QueryTypes.SELECT }),
+      sequelize.query(servicioExQuery, { type: QueryTypes.SELECT }),
+      sequelize.query(servicioInQuery, { type: QueryTypes.SELECT })
+    ]);
+
+    // Preparar respuesta
+    const response = {
+      estadisticas_generales: {
+        ...statsResult[0],
+        total_nuevas: nuevasResult[0].total_nuevas,
+        total_constantes: constantesResult[0].total_constantes,
+      },
+      litros_por_servicio: {
+        extrahospitalario: servicioExResult.map(servicio => ({
+          servicio: servicio.servicio,
+          total_donadoras: servicio.total_donadoras,
+          total_donaciones: servicio.total_donaciones,
+          litros: servicio.litros,
+          nuevas: servicio.nuevas,
+          constantes: servicio.constantes
+        })),
+        intrahospitalario: servicioInResult.map(servicio => ({
+          servicio: servicio.servicio,
+          total_donadoras: servicio.total_donadoras,
+          total_donaciones: servicio.total_donaciones,
+          litros: servicio.litros,
+          nuevas: servicio.nuevas,
+          constantes: servicio.constantes
+        }))
+      }
+    };
+
+    res.send(response);
+  } catch (error) {
+    res.status(500).send({
+      message: error.message || 'Error al obtener las estadísticas.',
+    });
+  }
+};
+

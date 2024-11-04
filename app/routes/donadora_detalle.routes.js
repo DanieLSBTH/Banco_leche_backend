@@ -12,6 +12,9 @@ module.exports = (app) => {
     // Ruta para la nueva consulta
     router.get('/resumen-donaciones', donadoraDetalle.getResumenDonaciones);
     router.get('/resumen-por-mes', donadoraDetalle.getResumenPorMes);
+    router.get('/buscar/id_donadora', donadoraDetalle.findDetailsByName);
+    router.get('/stats', donadoraDetalle.getStats);
+    
     // Recuperar un registro de donadora_detalle por su ID
     router.get("/:id_donadora_detalle", donadoraDetalle.findOne);
     
