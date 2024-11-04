@@ -12,7 +12,6 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.STRING(50) // Limitar a 50 caracteres
       }
     });
-  
     return Personal_estimulacion;
   };
   
