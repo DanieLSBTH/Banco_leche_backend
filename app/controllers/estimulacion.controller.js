@@ -10,13 +10,12 @@ const parseFecha = (fecha) => {
 };
 const { literal, fn, col } = require('sequelize');
 
-
 // Crear y guardar un nuevo registro en estimulacion
 exports.create = (req, res) => {
-  const { id_personal_estimulacion, fecha, id_intrahospitalario, constante, nueva  } = req.body;
+  const { id_personal_estimulacion, fecha, id_intrahospitalario, constante, nueva , id_personal } = req.body;
 
   // Verificar que todos los campos requeridos estén presentes
-  if (!id_personal_estimulacion || !fecha || !id_intrahospitalario || typeof constante === 'undefined' || typeof nueva === 'undefined' ) {
+  if (!id_personal_estimulacion || !fecha || !id_intrahospitalario || typeof constante === 'undefined' || typeof nueva === 'undefined' || !id_personal) {
     res.status(400).send({
       message: 'Todos los campos son obligatorios.',
     });
@@ -30,6 +29,7 @@ exports.create = (req, res) => {
     id_intrahospitalario,
     constante,
     nueva,
+    id_personal,
     
   })
     .then((data) => {
@@ -72,6 +72,7 @@ exports.findAll = (req, res) => {
     include: [
       { model: db.servicio_in, as: 'servicio_ins' },
       { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
+      {model: db.personal, as: 'personals' },
     ],
     limit: limit, // Límite por página
     offset: offset, // Desplazamiento por página
@@ -100,6 +101,7 @@ exports.findOne = (req, res) => {
     include: [
       { model: db.servicio_in, as: 'servicio_ins' },
       { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
+      { model: db.personal, as: 'personals' },
     ],
   })
     .then((data) => {
@@ -142,7 +144,6 @@ exports.update = (req, res) => {
       });
     });
 };
-
 // Eliminar un registro de estimulacion por su ID
 exports.delete = (req, res) => {
   const id_estimulacion = req.params.id_estimulacion;

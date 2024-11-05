@@ -24,10 +24,8 @@ module.exports = (sequelize, Sequelize) => {
     nueva: {
       type: Sequelize.BOOLEAN,
     },
-    id_personal_estimulacion: {  // Cambio de id_personal a id_personal_estimulacion
+    id_personal: {
       type: Sequelize.INTEGER,
-      allowNull: false,
-      
     },
   });
 
@@ -41,6 +39,11 @@ module.exports = (sequelize, Sequelize) => {
   Estimulacion.belongsTo(sequelize.models.personal_estimulaciones, {
     foreignKey: 'id_personal_estimulacion',
     as: 'personal_estimulaciones',
+  });
+
+  Estimulacion.belongsTo(sequelize.models.personal, {
+    foreignKey: 'id_personal',
+    as: 'personals',
   });
 
   return Estimulacion;
