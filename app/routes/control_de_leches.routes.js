@@ -11,7 +11,6 @@ router.get('/control-de-leche/totales', controlDeLechesController.findTotalsAndR
 // Recuperar un registro de control_de_leches por su ID
 router.get('/:id_control_leche', controlDeLechesController.findOne);
 
-
 // Actualizar un registro de control_de_leches por su ID
 router.put('/:id_control_leche', controlDeLechesController.update);
 
