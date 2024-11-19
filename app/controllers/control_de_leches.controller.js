@@ -2,55 +2,90 @@ const db = require('../models');
 const ControlDeLeche = db.control_de_leches;
 const Sequelize = require('sequelize');
 const { QueryTypes } = require('sequelize');
+const {trabajo_de_pasteurizaciones } = require('../models'); // Asegúrate de que esta línea esté bien
 const sequelize = db.sequelize;
 const Op = Sequelize.Op;
 
-// Crear y guardar un nuevo registro en control_de_leches
-exports.create = (req, res) => {
-  const { id_pasteurizacion, fecha_almacenamiento, volumen_ml_onza, tipo_de_leche, fecha_entrega, responsable } = req.body;
+exports.create = async (req, res) => {
+  const { id_pasteurizacion, frasco, tipo_frasco, unidosis, tipo_unidosis,fecha_almacenamiento, tipo_de_leche, fecha_entrega,responsable, letra_adicional } = req.body;
 
-  // Verificar que todos los campos requeridos estén presentes
-  if (!id_pasteurizacion || !fecha_almacenamiento || !volumen_ml_onza || !tipo_de_leche || !fecha_entrega || !responsable) {
-    res.status(400).send({
-      message: 'Todos los campos son obligatorios.',
-    });
-    return;
-  }
+  try {
+    const pasteurizacion = await db.trabajo_de_pasteurizaciones.findByPk(id_pasteurizacion);
+    if (!pasteurizacion) {
+      return res.status(404).send({ message: `No se encontró la pasteurización con id=${id_pasteurizacion}.` });
+    }
 
-  // Crear un registro en control_de_leches
-  ControlDeLeche.create({
-    id_pasteurizacion,
-    fecha_almacenamiento,
-    volumen_ml_onza,
-    tipo_de_leche,
-    fecha_entrega,
-    responsable,
-  })
-    .then((data) => {
-      res.send(data);
-    })
-    .catch((err) => {
-      res.status(500).send({
-        message: err.message || 'Error al crear el registro en control_de_leches.',
+    const no_frascoBase = pasteurizacion.no_frasco.match(/^\d+/)[0]; // Extrae los números del no_frasco
+    let registros = [];
+    let volumen_ml;
+
+    if (frasco) {
+      volumen_ml = tipo_frasco === '180ml' ? 180 : 150;
+      registros.push({
+        id_pasteurizacion,
+        no_frascoregistro: `${no_frascoBase}${letra_adicional || ''}`,
+        frasco: true,
+        tipo_frasco,
+        unidosis: false,
+        fecha_almacenamiento,
+        volumen_ml_onza: volumen_ml,
+        tipo_de_leche,
+        fecha_entrega,
+        responsable,
+       
       });
+    }
+
+    if (unidosis) {
+      let sufijos = [];
+      if (tipo_unidosis === '10ml') {
+        sufijos = Array.from({ length: 17 }, (_, i) => String.fromCharCode(97 + i)); // a - q
+        volumen_ml = 10;
+      } else if (tipo_unidosis === '20ml') {
+        sufijos = Array.from({ length: 9 }, (_, i) => String.fromCharCode(97 + i)); // a - i
+        volumen_ml = 20;
+      } else if (tipo_unidosis === '30ml') {
+        sufijos = Array.from({ length: 6 }, (_, i) => String.fromCharCode(97 + i)); // a - f
+        volumen_ml = 30;
+      }
+
+      sufijos.forEach(sufijo => {
+        registros.push({
+          id_pasteurizacion,
+          no_frascoregistro: `${no_frascoBase}${letra_adicional || ''}${sufijo}`,
+          frasco: false,
+          unidosis: true,
+          tipo_unidosis,
+          fecha_almacenamiento,
+          volumen_ml_onza: volumen_ml,
+          tipo_de_leche,
+          fecha_entrega,
+          responsable,
+          
+        });
+      });
+    }
+
+    // Insertar registros
+    await ControlDeLeche.bulkCreate(registros);
+    res.send({ message: 'Registros creados con éxito.', registros });
+  } catch (err) {
+    res.status(500).send({
+      message: err.message || 'Error al crear registros en control_de_leches.',
     });
+  }
 };
 
-// Recuperar todos los registros de control_de_leches de la base de datos con paginación
+
+
 exports.findAll = (req, res) => {
-  // Obtener los parámetros de paginación de los query params
-  const { page = 1, pageSize = 10 } = req.query; // Valores predeterminados: página 1, 10 registros por página
+  const { page, pageSize } = req.query; // page y pageSize opcionales
   const id_pasteurizacion = req.query.id_pasteurizacion;
   const tipo_de_leche = req.query.tipo_de_leche;
 
-  // Calcular el desplazamiento y el límite
-  const offset = (page - 1) * pageSize; // Desplazamiento
-  const limit = parseInt(pageSize, 10); // Límite de registros por página
-
-  // Inicializar la condición de búsqueda
+  // Inicializamos condiciones de búsqueda
   let condition = {};
 
-  // Filtros condicionales
   if (id_pasteurizacion) {
     condition.id_pasteurizacion = { [Op.eq]: id_pasteurizacion };
   }
@@ -59,8 +94,8 @@ exports.findAll = (req, res) => {
     condition.tipo_de_leche = { [Op.like]: `%${tipo_de_leche}%` };
   }
 
-  // Usar findAndCountAll para obtener los datos paginados y el total de registros
-  ControlDeLeche.findAndCountAll({
+  // Configurar opciones de paginación solo si page y pageSize están definidos
+  const queryOptions = {
     where: condition,
     include: [
       { 
@@ -69,16 +104,36 @@ exports.findAll = (req, res) => {
         attributes: ['no_frasco', 'kcal_l', 'porcentaje_grasa', 'acidez'],
       },
     ],
-    limit: limit,      // Límite por página
-    offset: offset,    // Desplazamiento según la página actual
-    order: [['id_control_leche', 'ASC']], // Ordenar por id_control_leche en orden ascendente
-  })
+    order: [['id_control_leche', 'ASC']],
+  };
+
+  if (page && pageSize) {
+    const offset = (page - 1) * parseInt(pageSize, 10);
+    const limit = parseInt(pageSize, 10);
+    queryOptions.limit = limit;
+    queryOptions.offset = offset;
+  }
+
+  // Ejecutar consulta con las opciones definidas
+  ControlDeLeche.findAndCountAll(queryOptions)
     .then(result => {
+      const formattedRows = result.rows.map(row => {
+        return {
+          ...row.dataValues,
+          fecha_almacenamiento: row.fecha_almacenamiento,
+          fecha_entrega: row.fecha_entrega,
+        };
+      });
+
+      // Preparar respuesta con o sin paginación
+      const totalPages = page && pageSize ? Math.ceil(result.count / pageSize) : 1;
+      const currentPage = page ? parseInt(page, 10) : 1;
+
       res.send({
-        controlDeLeches: result.rows,  // Registros actuales
-        totalRecords: result.count,    // Número total de registros
-        currentPage: parseInt(page, 10),       // Página actual
-        totalPages: Math.ceil(result.count / limit) // Total de páginas
+        controlDeLeches: formattedRows,
+        totalRecords: result.count,
+        currentPage: currentPage,
+        totalPages: totalPages,
       });
     })
     .catch(err => {
@@ -87,6 +142,7 @@ exports.findAll = (req, res) => {
       });
     });
 };
+
 // Recuperar un registro de control_de_leches por su ID
 exports.findOne = (req, res) => {
   const id_control_leche = req.params.id_control_leche;
@@ -243,5 +299,81 @@ exports.getMetrics = async (req, res) => {
   } catch (error) {
       console.error("Error al recuperar métricas:", error);
       return res.status(500).json({ message: "Error al recuperar las métricas." });
+  }
+};
+
+exports.findTotalsAndRecordsByDateRange = async (req, res) => {
+  const { fechaInicio, fechaFin } = req.query;
+
+  if (!fechaInicio || !fechaFin) {
+    return res.status(400).send({
+      message: "Debes proporcionar 'fechaInicio' y 'fechaFin'.",
+    });
+  }
+
+  try {
+    // Realiza la consulta para obtener registros y totales
+    const registros = await ControlDeLeche.findAll({
+      where: {
+        fecha_almacenamiento: {
+          [Op.between]: [new Date(fechaInicio), new Date(fechaFin)],
+        },
+      },
+      include: [
+        {
+          model: trabajo_de_pasteurizaciones,
+          as: 'trabajo_de_pasteurizaciones',
+          attributes: ['kcal_l', 'porcentaje_grasa', 'acidez'],
+        },
+      ],
+      attributes: [
+        'id_control_leche',
+        'no_frascoregistro',
+        'fecha_almacenamiento',
+        'volumen_ml_onza',
+        'tipo_de_leche',
+        'fecha_entrega',
+        'responsable',
+        'frasco',
+        'unidosis',
+      ],
+      order: [['fecha_almacenamiento', 'ASC']], // Ordenar por fecha de almacenamiento
+    });
+
+    // Calcular totales de frascos y unidosis
+    let totalFrascos = 0;
+    let totalUnidosis = 0;
+
+    registros.forEach((registro) => {
+      if (registro.frasco) totalFrascos += 1;
+      if (registro.unidosis) totalUnidosis += 1;
+    });
+
+    // Formatear registros para incluir datos relacionados
+    const registrosFormateados = registros.map((registro) => ({
+      ID: registro.id_control_leche,
+      NoFrasco: registro.no_frascoregistro,
+      FechaAlmacenamiento: registro.fecha_almacenamiento,
+      Volumen: registro.volumen_ml_onza,
+      Kcal_l: registro.trabajo_de_pasteurizaciones?.kcal_l || null,
+      Grasa: registro.trabajo_de_pasteurizaciones?.porcentaje_grasa || null,
+      Acidez: registro.trabajo_de_pasteurizaciones?.acidez || null,
+      TipoDeLeche: registro.tipo_de_leche,
+      FechaEntrega: registro.fecha_entrega,
+      Responsable: registro.responsable,
+    }));
+
+    // Enviar respuesta con totales y registros
+    res.send({
+      fechaInicio,
+      fechaFin,
+      totalFrascos,
+      totalUnidosis,
+      registros: registrosFormateados,
+    });
+  } catch (err) {
+    res.status(500).send({
+      message: err.message || 'Ocurrió un error al recuperar los datos.',
+    });
   }
 };

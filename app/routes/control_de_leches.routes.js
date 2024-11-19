@@ -7,6 +7,7 @@ router.post('/', controlDeLechesController.create);
 // Recuperar todos los registros de control_de_leches
 router.get('/', controlDeLechesController.findAll);
 router.get('/metrics',controlDeLechesController.getMetrics)
+router.get('/control-de-leche/totales', controlDeLechesController.findTotalsAndRecordsByDateRange);
 // Recuperar un registro de control_de_leches por su ID
 router.get('/:id_control_leche', controlDeLechesController.findOne);
 

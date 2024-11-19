@@ -119,47 +119,54 @@ exports.create = async (req, res) => {
  // Recuperar todos los registros de trabajo_de_pasteurizaciones de la base de datos con paginación
  exports.findAll = (req, res) => {
   // Obtener los parámetros de paginación de los query params
-  const { page = 1, pageSize = 10 } = req.query; // Valores predeterminados: página 1, 10 registros por página
+  const { page, pageSize } = req.query; // Sin valores predeterminados, para que sean opcionales
   const mesActual = req.query.mesActual === 'true';
-  
-  // Calcular el desplazamiento y el límite
-  const offset = (page - 1) * pageSize; // Desplazamiento
-  const limit = parseInt(pageSize, 10); // Límite de registros por página
 
   let condition = {};
 
+  // Filtrar por mes actual si se solicita
   if (mesActual) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Primer día del mes actual
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Último día del mes actual
 
     condition.fecha = {
-      [Op.between]: [startOfMonth, endOfMonth]
+      [Op.between]: [startOfMonth, endOfMonth],
     };
   }
 
-  // Usar findAndCountAll para obtener los datos paginados y el total de registros
-  TrabajoDePasteurizaciones.findAndCountAll({
+  // Configurar las opciones de consulta con o sin paginación
+  const queryOptions = {
     where: condition,
-    limit: limit,      // Límite por página
-    offset: offset,    // Desplazamiento según la página actual
-    order: [['id_pasteurizacion', 'DESC']] // Ordenar por id_pasteurizacion en orden ascendente
-  })
-  .then(result => {
-    res.send({
-      pasteurizaciones: result.rows,  // Registros actuales
-      totalRecords: result.count,            // Número total de registros
-      currentPage: parseInt(page, 10),       // Página actual
-      totalPages: Math.ceil(result.count / limit) // Total de páginas
-    });
-  })
-  .catch(err => {
-    res.status(500).send({
-      message: err.message || 'Ocurrió un error al recuperar los registros de trabajo_de_pasteurizaciones.',
-    });
-  });
-};
+    order: [['id_pasteurizacion', 'DESC']], // Ordenar por id_pasteurizacion en orden descendente
+  };
 
+  if (page && pageSize) {
+    const offset = (page - 1) * parseInt(pageSize, 10);
+    const limit = parseInt(pageSize, 10);
+    queryOptions.limit = limit;
+    queryOptions.offset = offset;
+  }
+
+  // Usar findAndCountAll para obtener los datos y el total de registros
+  TrabajoDePasteurizaciones.findAndCountAll(queryOptions)
+    .then(result => {
+      const totalPages = page && pageSize ? Math.ceil(result.count / pageSize) : 1;
+      const currentPage = page ? parseInt(page, 10) : 1;
+
+      res.send({
+        pasteurizaciones: result.rows,        // Registros actuales
+        totalRecords: result.count,          // Número total de registros
+        currentPage: currentPage,            // Página actual
+        totalPages: totalPages,              // Total de páginas
+      });
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || 'Ocurrió un error al recuperar los registros de trabajo_de_pasteurizaciones.',
+      });
+    });
+};
 
 // Recuperar un registro de trabajo_de_pasteurizaciones por su ID
 exports.findOne = (req, res) => {

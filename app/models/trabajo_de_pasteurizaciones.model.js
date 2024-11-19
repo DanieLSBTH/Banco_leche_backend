@@ -14,7 +14,7 @@ module.exports = (sequelize, Sequelize) => {
         allowNull: false
       },
       no_frasco: {
-        type: Sequelize.INTEGER, // Número de frasco
+        type: Sequelize.STRING, // Número de frasco
         allowNull: false
       },
       crematorio_1_1: {

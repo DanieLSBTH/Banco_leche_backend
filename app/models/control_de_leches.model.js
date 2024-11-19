@@ -9,28 +9,48 @@ module.exports = (sequelize, Sequelize) => {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
+    no_frascoregistro: {
+      type: Sequelize.STRING, // Número de frasco
+      allowNull: false
+    },
+    frasco: {
+      type: Sequelize.BOOLEAN,
+      defaultValue: true,
+    },
+    tipo_frasco: {
+      type: Sequelize.STRING, // tipo frasco
+      allowNull: true
+    },
+    unidosis: {
+      type: Sequelize.BOOLEAN,
+      defaultValue: true,
+    },
+    tipo_unidosis: {
+      type: Sequelize.STRING, // tipo unidosis 
+      allowNull: true
+    },
     fecha_almacenamiento: {
       type: Sequelize.DATE,
-      allowNull: false,
+      allowNull: true,
       get() {
-        // Devolver solo la parte de la fecha
-        return this.getDataValue('fecha_almacenamiento').toISOString().split('T')[0];
+        const rawValue = this.getDataValue('fecha_almacenamiento');
+        return rawValue ? rawValue.toISOString().split('T')[0] : null; // Devuelve null si el valor es null
       }
     },
     volumen_ml_onza: {
       type: Sequelize.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     tipo_de_leche: {
       type: Sequelize.STRING(50),
-      allowNull: false,
+      allowNull: true,
     },
     fecha_entrega: {
       type: Sequelize.DATE,
-      allowNull: false,
+      allowNull: true,
       get() {
-        // Devolver solo la parte de la fecha
-        return this.getDataValue('fecha_entrega').toISOString().split('T')[0];
+        const rawValue = this.getDataValue('fecha_entrega');
+        return rawValue ? rawValue.toISOString().split('T')[0] : null; // Devuelve null si el valor es null
       }
     },
     responsable: {
