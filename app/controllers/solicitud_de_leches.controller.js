@@ -102,7 +102,7 @@ exports.findAll = async (req, res) => {
         {
           model: ControlDeLeche,
           as: 'control_de_leches',
-          attributes: ['fecha_almacenamiento', 'volumen_ml_onza'],
+          attributes: ['no_frascoregistro','fecha_almacenamiento', 'volumen_ml_onza'],
           include: [
             {
               model: db.trabajo_de_pasteurizaciones,
@@ -114,7 +114,7 @@ exports.findAll = async (req, res) => {
       ],
       limit: limit,      // Límite por página
       offset: offset,    // Desplazamiento según la página actual
-      order: [['id_solicitud', 'ASC']] // Ordenar por id_solicitud en orden ascendente
+      order: [['id_solicitud', 'DESC']] // Ordenar por id_solicitud en orden ascendente
     });
 
     // Responder con los datos paginados y el total de registros
@@ -306,24 +306,24 @@ exports.getResumenPorMes = async (req, res) => {
   }
 };
 
-exports.getResumenPorServicioYFechas = async (req, res) => {
+exports.getResumenPorServicioYFechas = async (req, res) => { 
   const { fechaInicio, fechaFin } = req.query;
 
   try {
-    // Validar las fechas de entrada
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ message: "Las fechas de inicio y fin son obligatorias." });
     }
 
-    // Obtener todas las solicitudes de leche agrupadas por servicio y mes
+    // Consulta única que obtiene todos los datos necesarios
     const solicitudes = await SolicitudDeLeches.findAll({
       attributes: [
         'servicio',
+        [Sequelize.fn('COUNT', Sequelize.col('*')), 'totalsolicitudes'],
+        [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('registro_medico'))), 'totalregistrosunicos'],
+        [Sequelize.fn('SUM', Sequelize.col('onzas')), 'totalonzas'],
+        [Sequelize.fn('SUM', Sequelize.col('litros')), 'totallitros'],
         [Sequelize.literal('EXTRACT(MONTH FROM "fecha_entrega")'), 'mes'],
-        [Sequelize.literal('EXTRACT(YEAR FROM "fecha_entrega")'), 'año'],
-        [Sequelize.fn('COUNT', Sequelize.col('registro_medico')), 'totalBeneficiados'],
-        [Sequelize.fn('SUM', Sequelize.col('litros')), 'totalLitrosDistribuidos'],
-        [Sequelize.fn('SUM', Sequelize.col('onzas')), 'totalOnzas']
+        [Sequelize.literal('EXTRACT(YEAR FROM "fecha_entrega")'), 'año']
       ],
       where: {
         fecha_entrega: {
@@ -338,60 +338,77 @@ exports.getResumenPorServicioYFechas = async (req, res) => {
       ]
     });
 
-    // Inicializar el objeto final para el resumen
-    const asistencia = {};
-    let totalGeneralBeneficiados = 0;
-    let totalGeneralLitros = 0;
-    let totalGeneralOnzas = 0;
+    // Consulta adicional para obtener el total general de registros únicos
+    const totalGeneralUnicos = await SolicitudDeLeches.findAll({
+      attributes: [
+        [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('registro_medico'))), 'totalregistrosunicos'],
+        [Sequelize.fn('SUM', Sequelize.col('onzas')), 'totalonzas'],
+        [Sequelize.fn('SUM', Sequelize.col('litros')), 'totallitros'],
+        [Sequelize.fn('COUNT', Sequelize.col('*')), 'totalsolicitudes']
+      ],
+      where: {
+        fecha_entrega: {
+          [Sequelize.Op.between]: [fechaInicio, fechaFin]
+        }
+      }
+    });
 
-    // Recorrer las solicitudes agrupadas por servicio
+    // Inicializar el objeto para el resumen
+    const asistencia = {};
+    
+    // Procesar los datos por servicio
     solicitudes.forEach(solicitud => {
       const servicio = solicitud.get('servicio');
       const mes = solicitud.get('mes');
       const año = solicitud.get('año');
-      const totalMesBeneficiados = parseInt(solicitud.get('totalBeneficiados')) || 0;
-      const totalMesLitros = parseFloat(solicitud.get('totalLitrosDistribuidos')) || 0;
-      const totalMesOnzas = parseFloat(solicitud.get('totalOnzas')) || 0;
-
-      // Sumar totales generales
-      totalGeneralBeneficiados += totalMesBeneficiados;
-      totalGeneralLitros += totalMesLitros;
-      totalGeneralOnzas += totalMesOnzas;
-
-      // Formato del mes
       const nombreDelMes = nombreMes(mes) + ` ${año}`;
 
-      // Inicializar objeto para el servicio si no existe
       if (!asistencia[servicio]) {
         asistencia[servicio] = {
           totalBeneficiados: 0,
+          totalRegistrosUnicos: 0,
           totalLitrosDistribuidos: 0,
           totalOnzas: 0,
           meses: {}
         };
       }
 
-      // Sumar totales por servicio
-      asistencia[servicio].totalBeneficiados += totalMesBeneficiados;
-      asistencia[servicio].totalLitrosDistribuidos += totalMesLitros;
-      asistencia[servicio].totalOnzas += totalMesOnzas;
+      // Actualizar los totales por servicio
+      const totalMesRegistrosUnicos = parseInt(solicitud.get('totalregistrosunicos')) || 0;
+      const totalMesOnzas = parseFloat(solicitud.get('totalonzas')) || 0;
+      const totalMesLitros = parseFloat(solicitud.get('totallitros')) || 0;
+      const totalSolicitudes = parseInt(solicitud.get('totalsolicitudes')) || 0;
+
+      // Actualizar los totales del servicio
+      asistencia[servicio].totalBeneficiados = 
+        (asistencia[servicio].totalBeneficiados || 0) + totalSolicitudes;
+      asistencia[servicio].totalRegistrosUnicos = 
+        Math.max(asistencia[servicio].totalRegistrosUnicos || 0, totalMesRegistrosUnicos);
+      asistencia[servicio].totalLitrosDistribuidos = 
+        (asistencia[servicio].totalLitrosDistribuidos || 0) + totalMesLitros;
+      asistencia[servicio].totalOnzas = 
+        (asistencia[servicio].totalOnzas || 0) + totalMesOnzas;
 
       // Guardar los datos del mes
       asistencia[servicio].meses[nombreDelMes] = {
-        totalBeneficiados: totalMesBeneficiados,
+        totalBeneficiados: totalSolicitudes,
+        totalRegistrosUnicos: totalMesRegistrosUnicos,
         totalLitrosDistribuidos: totalMesLitros,
         totalOnzas: totalMesOnzas
       };
     });
 
-    // Enviar la respuesta en formato JSON
+    // Obtener los totales generales de la consulta adicional
+    const totalGeneral = {
+      totalBeneficiados: parseInt(totalGeneralUnicos[0].get('totalsolicitudes')) || 0,
+      totalRegistrosUnicos: parseInt(totalGeneralUnicos[0].get('totalregistrosunicos')) || 0,
+      totalLitrosDistribuidos: parseFloat(totalGeneralUnicos[0].get('totallitros')) || 0,
+      totalOnzas: parseFloat(totalGeneralUnicos[0].get('totalonzas')) || 0
+    };
+
     res.json({
       asistencia,
-      totalGeneral: {
-        totalBeneficiados: totalGeneralBeneficiados,
-        totalLitrosDistribuidos: totalGeneralLitros,
-        totalOnzas: totalGeneralOnzas
-      }
+      totalGeneral
     });
 
   } catch (error) {
@@ -401,7 +418,6 @@ exports.getResumenPorServicioYFechas = async (req, res) => {
     });
   }
 };
-
 
 // Función para obtener el nombre del mes a partir de su número
 function nombreMes(mes) {

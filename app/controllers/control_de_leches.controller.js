@@ -39,7 +39,8 @@ exports.create = async (req, res) => {
     if (unidosis) {
       let sufijos = [];
       if (tipo_unidosis === '10ml') {
-        sufijos = Array.from({ length: 17 }, (_, i) => String.fromCharCode(97 + i)); // a - q
+        sufijos = [...'abcdefghijklmnñopq']; // Incluye las letras de la 'a' a la 'q' más la 'ñ'
+  
         volumen_ml = 10;
       } else if (tipo_unidosis === '20ml') {
         sufijos = Array.from({ length: 9 }, (_, i) => String.fromCharCode(97 + i)); // a - i
