@@ -12,7 +12,7 @@ module.exports = app => {
   
     
     router.get('/getStatsByDateRange', trabajoDePasteurizaciones.getStatsByDateRange);
-    
+    router.get('/getStats', trabajoDePasteurizaciones.getStates);
     // Recuperar un solo registro de trabajo_de_pasteurizaciones por ID
     router.get('/:id_pasteurizacion', trabajoDePasteurizaciones.findOne);
   

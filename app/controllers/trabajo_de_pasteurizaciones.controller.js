@@ -321,3 +321,57 @@ exports.getStatsByDateRange = async (req, res) => {
     });
   }
 };
+
+exports.getStates = async (req, res) => {
+  try {
+    // Obtener las fechas del mes actual
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Primer día del mes
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); // Último día del mes
+
+    // Realizar la consulta con Sequelize
+    const results = await TrabajoDePasteurizaciones.findOne({
+      attributes: [
+        [Sequelize.fn('AVG', Sequelize.col('kcal_l')), 'promedio_kcal_l'],
+        [Sequelize.fn('SUM', Sequelize.col('acidez')), 'total_acidez'],
+        [Sequelize.fn('COUNT', Sequelize.col('id_pasteurizacion')), 'total_registros'],
+      ],
+      where: {
+        fecha: {
+          [Op.between]: [startOfMonth, endOfMonth],
+        },
+      },
+    });
+
+    // Formatear el mes y año actual
+    const formattedMonth = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+    }).format(now);
+
+    // Si no hay resultados, devolver valores en cero junto con el mes
+    if (!results) {
+      return res.send({
+        promedio_kcal_l: 0,
+        total_acidez: 0,
+        total_registros: 0,
+        mes: formattedMonth,
+      });
+    }
+
+    // Formatear los resultados
+    const stats = {
+      promedio_kcal_l: Number(results.getDataValue('promedio_kcal_l') || 0).toFixed(2),
+      total_acidez: Number(results.getDataValue('total_acidez') || 0).toFixed(2),
+      total_registros: Number(results.getDataValue('total_registros') || 0),
+      mes: formattedMonth,
+    };
+
+    res.send(stats);
+  } catch (err) {
+    res.status(500).send({
+      message: err.message || 'Error al obtener las estadísticas de pasteurización.',
+      error: err,
+    });
+  }
+};
