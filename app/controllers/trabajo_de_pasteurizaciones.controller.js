@@ -116,10 +116,10 @@ exports.create = async (req, res) => {
 };
 
 
- // Recuperar todos los registros de trabajo_de_pasteurizaciones de la base de datos con paginación
- exports.findAll = (req, res) => {
-  // Obtener los parámetros de paginación de los query params
-  const { page, pageSize } = req.query; // Sin valores predeterminados, para que sean opcionales
+// Recuperar todos los registros de trabajo_de_pasteurizaciones de la base de datos con paginación
+exports.findAll = (req, res) => {
+  // Establecer valores predeterminados para page y pageSize
+  const { page = 1, pageSize = 10 } = req.query; // Asegura valores válidos
   const mesActual = req.query.mesActual === 'true';
 
   let condition = {};
@@ -135,24 +135,22 @@ exports.create = async (req, res) => {
     };
   }
 
-  // Configurar las opciones de consulta con o sin paginación
+  // Configurar las opciones de consulta con paginación
+  const offset = (page - 1) * parseInt(pageSize, 10);
+  const limit = parseInt(pageSize, 10);
+
   const queryOptions = {
     where: condition,
     order: [['id_pasteurizacion', 'DESC']], // Ordenar por id_pasteurizacion en orden descendente
+    limit: limit, // Siempre se incluye paginación
+    offset: offset,
   };
-
-  if (page && pageSize) {
-    const offset = (page - 1) * parseInt(pageSize, 10);
-    const limit = parseInt(pageSize, 10);
-    queryOptions.limit = limit;
-    queryOptions.offset = offset;
-  }
 
   // Usar findAndCountAll para obtener los datos y el total de registros
   TrabajoDePasteurizaciones.findAndCountAll(queryOptions)
     .then(result => {
-      const totalPages = page && pageSize ? Math.ceil(result.count / pageSize) : 1;
-      const currentPage = page ? parseInt(page, 10) : 1;
+      const totalPages = Math.ceil(result.count / pageSize); // Total de páginas
+      const currentPage = parseInt(page, 10);               // Página actual
 
       res.send({
         pasteurizaciones: result.rows,        // Registros actuales
@@ -167,6 +165,7 @@ exports.create = async (req, res) => {
       });
     });
 };
+
 
 // Recuperar un registro de trabajo_de_pasteurizaciones por su ID
 exports.findOne = (req, res) => {
