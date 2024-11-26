@@ -373,3 +373,60 @@ exports.getStates = async (req, res) => {
     });
   }
 };
+exports.findAvailable = (req, res) => {
+  const { page = 1, pageSize } = req.query; // Valores predeterminados de paginación
+  const mesActual = req.query.mesActual === 'true'; // Filtro por mes actual
+
+  let condition = {}; // Condiciones básicas
+
+  // Filtrar por mes actual si se solicita
+  if (mesActual) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    condition.fecha = {
+      [Op.between]: [startOfMonth, endOfMonth],
+    };
+  }
+
+  // Configurar opciones de paginación
+  const limit = pageSize ? parseInt(pageSize, 10) : null;
+  const offset = limit ? (page - 1) * limit : null;
+
+  // Subconsulta para identificar los frascos ya utilizados en ControlDeLeche
+  const usedFrascosSubquery = {
+    model: ControlDeLeche,
+    attributes: ['id_pasteurizacion'], // Sólo necesitamos el ID de pasteurización
+  };
+
+  // Consulta principal
+  TrabajoDePasteurizaciones.findAndCountAll({
+    where: {
+      ...condition,
+      id_pasteurizacion: {
+        [Op.notIn]: Sequelize.literal(
+          `(SELECT id_pasteurizacion FROM control_de_leches)`
+        ),
+      },
+    },
+    order: [['id_pasteurizacion', 'DESC']],
+    ...(limit ? { limit, offset } : {}), // Paginación opcional
+  })
+    .then(result => {
+      const totalPages = limit ? Math.ceil(result.count / limit) : 1; // Total de páginas
+      const currentPage = parseInt(page, 10); // Página actual
+      
+      res.send({
+        pasteurizaciones: result.rows,  // Registros actuales
+        totalRecords: result.count,     // Número total de registros
+        currentPage: currentPage,       // Página actual
+        totalPages: totalPages,         // Total de páginas
+      });
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || 'Ocurrió un error al recuperar los registros disponibles de trabajo_de_pasteurizaciones.',
+      });
+    });
+};
