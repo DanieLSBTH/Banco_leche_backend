@@ -119,44 +119,43 @@ exports.create = async (req, res) => {
 // Recuperar todos los registros de trabajo_de_pasteurizaciones de la base de datos con paginación
 exports.findAll = (req, res) => {
   // Establecer valores predeterminados para page y pageSize
-  const { page = 1, pageSize = 10 } = req.query; // Asegura valores válidos
-  const mesActual = req.query.mesActual === 'true';
+  const { page = 1, pageSize } = req.query; // Quita el valor predeterminado de 10
+  const mesActual = req.query.mesActual === 'true';  
 
   let condition = {};
-
+  
   // Filtrar por mes actual si se solicita
   if (mesActual) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Primer día del mes actual
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Último día del mes actual
-
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
     condition.fecha = {
       [Op.between]: [startOfMonth, endOfMonth],
     };
   }
-
-  // Configurar las opciones de consulta con paginación
-  const offset = (page - 1) * parseInt(pageSize, 10);
-  const limit = parseInt(pageSize, 10);
+  
+  // Configurar las opciones de consulta con paginación opcional
+  const limit = pageSize ? parseInt(pageSize, 10) : null;
+  const offset = limit ? (page - 1) * limit : null;
 
   const queryOptions = {
     where: condition,
-    order: [['id_pasteurizacion', 'DESC']], // Ordenar por id_pasteurizacion en orden descendente
-    limit: limit, // Siempre se incluye paginación
-    offset: offset,
+    order: [['id_pasteurizacion', 'DESC']],
+    ...(limit ? { limit, offset } : {}), // Solo aplica límite y offset si están presentes
   };
-
+  
   // Usar findAndCountAll para obtener los datos y el total de registros
   TrabajoDePasteurizaciones.findAndCountAll(queryOptions)
     .then(result => {
-      const totalPages = Math.ceil(result.count / pageSize); // Total de páginas
-      const currentPage = parseInt(page, 10);               // Página actual
-
+      const totalPages = limit ? Math.ceil(result.count / limit) : 1; // Total de páginas
+      const currentPage = parseInt(page, 10); // Página actual
+      
       res.send({
-        pasteurizaciones: result.rows,        // Registros actuales
-        totalRecords: result.count,          // Número total de registros
-        currentPage: currentPage,            // Página actual
-        totalPages: totalPages,              // Total de páginas
+        pasteurizaciones: result.rows,  // Registros actuales
+        totalRecords: result.count,     // Número total de registros
+        currentPage: currentPage,       // Página actual
+        totalPages: totalPages,         // Total de páginas
       });
     })
     .catch(err => {
@@ -165,7 +164,6 @@ exports.findAll = (req, res) => {
       });
     });
 };
-
 
 // Recuperar un registro de trabajo_de_pasteurizaciones por su ID
 exports.findOne = (req, res) => {
