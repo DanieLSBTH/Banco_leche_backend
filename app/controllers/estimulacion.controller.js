@@ -581,21 +581,20 @@ exports.getResumenEstimulacionMensual = async (req, res) => {
 exports.getResumen_Estimulacion_Mensual = async (req, res) => {
   try {
     const query = `
-      SET lc_time TO 'es_ES';
-      
       SELECT 
-        TO_CHAR(fecha, 'TMMonth YYYY') AS mes,  -- Formatea el mes como texto (ej. "Septiembre 2024")
-        COUNT(*) AS total_estimulaciones,
-        COUNT(CASE WHEN constante = true THEN 1 END) AS total_constantes,
-        COUNT(CASE WHEN nueva = true THEN 1 END) AS total_nuevas
-      FROM 
-        public.estimulacions
-      WHERE 
-        EXTRACT(YEAR FROM fecha) = EXTRACT(YEAR FROM CURRENT_DATE)  -- Filtrar solo por el año actual
-      GROUP BY 
-        mes
-      ORDER BY 
-        MIN(fecha);
+  TO_CHAR(fecha, 'Month YYYY') AS mes,  -- Cambia 'Month' a 'TMMonth' si prefieres nombres completos en mayúsculas
+  COUNT(*) AS total_estimulaciones,
+  COUNT(CASE WHEN constante = true THEN 1 END) AS total_constantes,
+  COUNT(CASE WHEN nueva = true THEN 1 END) AS total_nuevas
+FROM 
+  public.estimulacions
+WHERE 
+  EXTRACT(YEAR FROM fecha) = EXTRACT(YEAR FROM CURRENT_DATE)  -- Filtrar solo por el año actual
+GROUP BY 
+  mes
+ORDER BY 
+  MIN(fecha);
+
     `;
 
     const resumen = await db.sequelize.query(query, {
