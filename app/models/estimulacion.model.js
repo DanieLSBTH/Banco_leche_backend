@@ -27,6 +27,9 @@ module.exports = (sequelize, Sequelize) => {
     id_personal: {
       type: Sequelize.INTEGER,
     },
+    id_extrahospitalario: {
+      type: Sequelize.INTEGER,
+    }
   });
 
   // Relación con Servicio Intrahospitalario
@@ -44,6 +47,10 @@ module.exports = (sequelize, Sequelize) => {
   Estimulacion.belongsTo(sequelize.models.personal, {
     foreignKey: 'id_personal',
     as: 'personals',
+  });
+  Estimulacion.belongsTo(sequelize.models.servicio_ex, {
+    foreignKey: 'id_extrahospitalario',
+    as: 'servicio_exes',
   });
 
   return Estimulacion;

@@ -12,14 +12,21 @@ const { literal, fn, col } = require('sequelize');
 
 // Crear y guardar un nuevo registro en estimulacion
 exports.create = (req, res) => {
-  const { id_personal_estimulacion, fecha, id_intrahospitalario, constante, nueva , id_personal } = req.body;
+  const { id_personal_estimulacion, fecha, id_intrahospitalario, constante, nueva , id_personal, id_extrahospitalario, } = req.body;
 
   // Verificar que todos los campos requeridos estén presentes
-  if (!id_personal_estimulacion || !fecha || !id_intrahospitalario || typeof constante === 'undefined' || typeof nueva === 'undefined' || !id_personal) {
+  if (!id_personal_estimulacion || !fecha || typeof constante === 'undefined' || typeof nueva === 'undefined' || !id_personal) {
     res.status(400).send({
       message: 'Todos los campos son obligatorios.',
     });
     return;
+  }
+
+   // Verificar que solo uno de los campos esté presente (id_extrahospitalario o id_intrahospitalario)
+   if (id_extrahospitalario && id_intrahospitalario) {
+    return res.status(400).send({
+      message: 'Solo se puede seleccionar un campo: id_extrahospitalario o id_intrahospitalario.',
+    });
   }
 
   // Crear un registro en estimulacion
@@ -30,6 +37,7 @@ exports.create = (req, res) => {
     constante,
     nueva,
     id_personal,
+    id_extrahospitalario,
     
   })
     .then((data) => {
@@ -73,6 +81,7 @@ exports.findAll = (req, res) => {
       { model: db.servicio_in, as: 'servicio_ins' },
       { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
       {model: db.personal, as: 'personals' },
+      { model: db.servicio_ex, as: 'servicio_exes' },
     ],
     limit: limit, // Límite por página
     offset: offset, // Desplazamiento por página
@@ -102,6 +111,7 @@ exports.findOne = (req, res) => {
       { model: db.servicio_in, as: 'servicio_ins' },
       { model: db.personal_estimulaciones, as: 'personal_estimulaciones' },
       { model: db.personal, as: 'personals' },
+      { model: db.servicio_ex, as: 'servicio_exes' },
     ],
   })
     .then((data) => {
@@ -189,63 +199,55 @@ exports.deleteAll = (req, res) => {
 
 exports.getEstadisticasPorFechas = async (req, res) => {
   const { fechaInicio, fechaFin } = req.query;
-
+  
   if (!fechaInicio || !fechaFin) {
     return res.status(400).send({ message: 'Las fechas de inicio y fin son requeridas.' });
   }
-
+  
   try {
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
     fin.setHours(23, 59, 59, 999);
-
+    
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       return res.status(400).send({ message: 'Formato de fecha inválido' });
     }
-
+    
     const dateCondition = {
       fecha: {
         [Op.between]: [inicio, fin],
       },
     };
-
+    
     // Total de estimulaciones (este sí debe contar todas)
     const totalEstimulaciones = await db.estimulacion.count({
       where: dateCondition,
     });
 
-    // Consulta para nuevas - contando una vez por persona
-    const nuevasUnicas = await db.estimulacion.findAll({
+    // Total de estimulaciones nuevas
+    const totalNuevas = await db.estimulacion.count({
       where: {
         ...dateCondition,
         nueva: true
-      },
-      attributes: [
-        'id_personal_estimulacion',
-        [Sequelize.fn('MIN', Sequelize.col('id_estimulacion')), 'primera_estimulacion']
-      ],
-      group: ['id_personal_estimulacion']
+      }
     });
 
-    // Consulta para constantes - contando una vez por persona
-    const constantesUnicas = await db.estimulacion.findAll({
+    // Total de estimulaciones constantes
+    const totalConstantes = await db.estimulacion.count({
       where: {
         ...dateCondition,
         constante: true
-      },
-      attributes: [
-        'id_personal_estimulacion',
-        [Sequelize.fn('MIN', Sequelize.col('id_estimulacion')), 'primera_estimulacion']
-      ],
-      group: ['id_personal_estimulacion']
+      }
     });
-
-    // Total por servicio
-    const totalPorServicio = await db.estimulacion.findAll({
+    
+    // Desglose detallado por servicios intrahospitalarios
+    const detalleServiciosIn = await db.estimulacion.findAll({
       where: dateCondition,
       attributes: [
         [Sequelize.col('estimulacion.id_intrahospitalario'), 'id_intrahospitalario'],
-        [Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'total']
+        [Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'total_estimulaciones'],
+        [Sequelize.fn('COUNT', Sequelize.literal('CASE WHEN estimulacion.nueva = true THEN 1 END')), 'total_nuevas'],
+        [Sequelize.fn('COUNT', Sequelize.literal('CASE WHEN estimulacion.constante = true THEN 1 END')), 'total_constantes']
       ],
       include: [{
         model: db.servicio_in,
@@ -261,32 +263,66 @@ exports.getEstadisticasPorFechas = async (req, res) => {
       order: [[Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'DESC']]
     });
 
+    // Desglose detallado por servicios extrahospitalarios
+    const detalleServiciosEx = await db.estimulacion.findAll({
+      where: dateCondition,
+      attributes: [
+        [Sequelize.col('estimulacion.id_extrahospitalario'), 'id_extrahospitalario'],
+        [Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'total_estimulaciones'],
+        [Sequelize.fn('COUNT', Sequelize.literal('CASE WHEN estimulacion.nueva = true THEN 1 END')), 'total_nuevas'],
+        [Sequelize.fn('COUNT', Sequelize.literal('CASE WHEN estimulacion.constante = true THEN 1 END')), 'total_constantes']
+      ],
+      include: [{
+        model: db.servicio_ex,
+        as: 'servicio_exes',
+        attributes: ['servicio'],
+        required: true
+      }],
+      group: [
+        'estimulacion.id_extrahospitalario',
+        'servicio_exes.id_extrahospitalario',
+        'servicio_exes.servicio'
+      ],
+      order: [[Sequelize.fn('COUNT', Sequelize.col('estimulacion.id_estimulacion')), 'DESC']]
+    });
+
+    // Formatear detalles de servicios intrahospitalarios
+    const formattedDetalleServiciosIn = detalleServiciosIn.map(servicio => ({
+      id_intrahospitalario: servicio.id_intrahospitalario,
+      servicio: servicio.servicio_ins.servicio,
+      total_estimulaciones: parseInt(servicio.get('total_estimulaciones')),
+      total_nuevas: parseInt(servicio.get('total_nuevas')),
+      total_constantes: parseInt(servicio.get('total_constantes'))
+    }));
+
+    // Formatear detalles de servicios extrahospitalarios
+    const formattedDetalleServiciosEx = detalleServiciosEx.map(servicio => ({
+      id_extrahospitalario: servicio.id_extrahospitalario,
+      servicio: servicio.servicio_exes.servicio,
+      total_estimulaciones: parseInt(servicio.get('total_estimulaciones')),
+      total_nuevas: parseInt(servicio.get('total_nuevas')),
+      total_constantes: parseInt(servicio.get('total_constantes'))
+    }));
+    
     // Total de personas distintas
     const totalPersonas = await db.estimulacion.count({
       where: dateCondition,
       distinct: true,
       col: 'id_personal_estimulacion',
     });
-
-    // Formatear totales por servicio
-    const formattedTotalPorServicio = totalPorServicio.map(servicio => ({
-      id_intrahospitalario: servicio.id_intrahospitalario,
-      total: parseInt(servicio.get('total')),
-      servicio_ins: servicio.servicio_ins
-    }));
-
+    
     // Respuesta
     res.send({
       totalEstimulaciones,
-      totalNuevas: nuevasUnicas.length,        // Conteo único de personas con nuevas
-      totalConstantes: constantesUnicas.length, // Conteo único de personas con constantes
-      totalPorServicio: formattedTotalPorServicio,
+      totalNuevas,
+      totalConstantes,
       totalPersonas,
+      serviciosIntrahospitalarios: formattedDetalleServiciosIn,
+      serviciosExtrahospitalarios: formattedDetalleServiciosEx
     });
-
   } catch (error) {
     console.error('Error en getEstadisticasPorFechas:', error);
-    res.status(500).send({ 
+    res.status(500).send({
       message: 'Error al recuperar las estadísticas de estimulaciones.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
