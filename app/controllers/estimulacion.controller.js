@@ -356,6 +356,11 @@ exports.findDetailsById = async (req, res) => {
           model: db.servicio_in,
           as: 'servicio_ins',
           attributes: ['servicio']
+        },
+        {
+          model: db.servicio_ex,
+          as: 'servicio_exes',
+          attributes: ['id_extrahospitalario', 'servicio']
         }
       ],
       order: [['fecha', 'ASC']] // Ordenar por fecha ascendente
@@ -399,7 +404,12 @@ exports.findDetailsById = async (req, res) => {
       personaData.resumen.total_visitas++;
       if (estimulacion.nueva) personaData.resumen.total_nuevas++;
       if (estimulacion.constante) personaData.resumen.total_constantes++;
-      personaData.resumen.servicios_visitados.add(estimulacion.servicio_ins.servicio);
+      
+      // Determinar el servicio y agregarlo a servicios visitados
+      const servicio = estimulacion.servicio_ins ? 
+        estimulacion.servicio_ins.servicio : 
+        (estimulacion.servicio_exes ? estimulacion.servicio_exes.servicio : 'Sin servicio');
+      personaData.resumen.servicios_visitados.add(servicio);
       
       // Actualizar primera y última visita
       const fechaVisita = estimulacion.fecha;
@@ -413,7 +423,8 @@ exports.findDetailsById = async (req, res) => {
       // Agregar detalle de la visita
       personaData.visitas.push({
         fecha: estimulacion.fecha,
-        servicio: estimulacion.servicio_ins.servicio,
+        servicio: servicio,
+        tipo_servicio: estimulacion.servicio_ins ? 'Intrahospitalario' : 'Extrahospitalario',
         tipo: {
           nueva: estimulacion.nueva,
           constante: estimulacion.constante
@@ -480,7 +491,6 @@ function obtenerServiciosMasFrecuentes(resultados) {
       return acc;
     }, {});
 }
-
 
 exports.getAsistencias = async (req, res) => {
   try {
