@@ -821,3 +821,92 @@ exports.getStats = async (req, res) => {
   }
 };
 
+
+//top de donadoras 
+// Nuevo controlador para obtener el top 5 de donadoras por servicio
+exports.getTopDonadoras = (req, res) => {
+  const { fechaInicio, fechaFin } = req.query;
+
+  // Verificar que las fechas de inicio y fin estén presentes
+  if (!fechaInicio || !fechaFin) {
+    return res.status(400).send({
+      message: 'Debe proporcionar una fecha de inicio y una fecha de fin.',
+    });
+  }
+
+  // Verificar el formato de las fechas
+  const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regexFecha.test(fechaInicio) || !regexFecha.test(fechaFin)) {
+    return res.status(400).send({
+      message: 'El formato de las fechas debe ser YYYY-MM-DD.',
+    });
+  }
+
+  // Ajustar la fecha de fin para que incluya el día completo (23:59:59)
+  const fechaFinAjustada = `${fechaFin} 23:59:59`;
+
+  // Consulta SQL para obtener el top 5 de donadoras por servicio
+  const query = ` 
+  WITH extrahospitalario AS (
+    SELECT 
+      d.id_donadora,
+      d.nombre AS donadora_nombre,
+      'Extrahospitalario' AS servicio_tipo,
+      ext.servicio,
+      COUNT(*) AS total_donaciones,
+      SUM(dd.onzas) AS total_onzas,
+      SUM(dd.litros) AS total_litros
+    FROM donadora_detalles dd
+    JOIN donadoras d ON dd.id_donadora = d.id_donadora
+    JOIN servicio_exes ext ON dd.id_extrahospitalario = ext.id_extrahospitalario
+    WHERE dd.fecha BETWEEN :fechaInicio AND :fechaFinAjustada
+      AND dd.id_extrahospitalario IS NOT NULL
+    GROUP BY d.id_donadora, d.nombre, ext.servicio
+    ORDER BY total_donaciones DESC, total_onzas DESC
+    LIMIT 5
+  ), intrahospitalario AS (
+    SELECT 
+      d.id_donadora,
+      d.nombre AS donadora_nombre,
+      'Intrahospitalario' AS servicio_tipo,
+      int.servicio,
+      COUNT(*) AS total_donaciones,
+      SUM(dd.onzas) AS total_onzas,
+      SUM(dd.litros) AS total_litros
+    FROM donadora_detalles dd
+    JOIN donadoras d ON dd.id_donadora = d.id_donadora
+    JOIN servicio_ins int ON dd.id_intrahospitalario = int.id_intrahospitalario
+    WHERE dd.fecha BETWEEN :fechaInicio AND :fechaFinAjustada
+      AND dd.id_intrahospitalario IS NOT NULL
+    GROUP BY d.id_donadora, d.nombre, int.servicio
+    ORDER BY total_donaciones DESC, total_onzas DESC
+    LIMIT 5
+  ) 
+  SELECT * FROM extrahospitalario 
+  UNION ALL 
+  SELECT * FROM intrahospitalario 
+  ORDER BY servicio_tipo, total_donaciones DESC, total_onzas DESC;
+  `;
+
+  // Ejecutar la consulta SQL con los parámetros de fecha proporcionados
+  sequelize.query(query, {
+    replacements: { fechaInicio, fechaFinAjustada }, // Reemplazo seguro de las fechas
+    type: Sequelize.QueryTypes.SELECT, // Especifica que la consulta es un SELECT
+  })
+  .then((results) => {
+    // Procesar los resultados para agruparlos por tipo de servicio
+    const topDonadoras = {
+      extrahospitalario: results.filter(r => r.servicio_tipo === 'Extrahospitalario'),
+      intrahospitalario: results.filter(r => r.servicio_tipo === 'Intrahospitalario')
+    };
+
+    res.send(topDonadoras); // Devolver los resultados al cliente
+  })
+  .catch((err) => {
+    res.status(500).send({
+      message: 'Error al obtener el top 5 de donadoras.',
+      error: err.message,
+    });
+  });
+};
+

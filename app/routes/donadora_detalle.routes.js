@@ -14,6 +14,7 @@ module.exports = (app) => {
   router.get('/resumen-por-mes', donadoraDetalle.getResumenPorMes);
   router.get('/buscar/id_donadora', donadoraDetalle.findDetailsByName);
   router.get('/stats', donadoraDetalle.getStats);
+  router.get('/top-donadoras', donadoraDetalle.getTopDonadoras);
   
   // Recuperar un registro de donadora_detalle por su ID
   router.get("/:id_donadora_detalle", donadoraDetalle.findOne);
