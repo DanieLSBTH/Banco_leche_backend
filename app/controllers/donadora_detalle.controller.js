@@ -851,8 +851,8 @@ exports.getTopDonadoras = (req, res) => {
     SELECT 
       d.id_donadora,
       d.nombre AS donadora_nombre,
+      d.apellido AS donadora_apellido,
       'Extrahospitalario' AS servicio_tipo,
-      ext.servicio,
       COUNT(*) AS total_donaciones,
       SUM(dd.onzas) AS total_onzas,
       SUM(dd.litros) AS total_litros
@@ -868,8 +868,8 @@ exports.getTopDonadoras = (req, res) => {
     SELECT 
       d.id_donadora,
       d.nombre AS donadora_nombre,
+      d.apellido AS donadora_apellido,
       'Intrahospitalario' AS servicio_tipo,
-      int.servicio,
       COUNT(*) AS total_donaciones,
       SUM(dd.onzas) AS total_onzas,
       SUM(dd.litros) AS total_litros
