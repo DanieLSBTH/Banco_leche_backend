@@ -338,7 +338,10 @@ exports.findTotalsAndRecordsByDateRange = async (req, res) => {
         'frasco',
         'unidosis',
       ],
-      order: [['fecha_almacenamiento', 'ASC']], // Ordenar por fecha de almacenamiento
+      order: [
+      ['fecha_almacenamiento', 'ASC'],
+      ['id_control_leche', 'ASC'],
+    ], // Ordenar por fecha de almacenamiento
     });
 
     // Calcular totales de frascos y unidosis
