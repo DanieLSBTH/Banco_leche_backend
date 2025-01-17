@@ -105,7 +105,7 @@ exports.findAll = (req, res) => {
         attributes: ['no_frasco', 'kcal_l', 'porcentaje_grasa', 'acidez'],
       },
     ],
-    order: [['id_control_leche', 'ASC']],
+    order: [['id_control_leche', 'DESC']],
   };
 
   if (page && pageSize) {
