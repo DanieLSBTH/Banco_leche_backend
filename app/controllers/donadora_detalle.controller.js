@@ -415,7 +415,7 @@ exports.getResumenPorMes = async (req, res) => {
   try {
     // Consulta SQL en bruto
     const query = `
-      WITH donaciones AS (
+     WITH donaciones AS (
     SELECT 
         TO_CHAR(dd.fecha, 'TMMonth YYYY') AS mes,
         TO_DATE(TO_CHAR(dd.fecha, 'TMMonth YYYY'), 'TMMonth YYYY') AS fecha_ordenamiento,
@@ -429,6 +429,8 @@ exports.getResumenPorMes = async (req, res) => {
         SUM(CASE WHEN dd.nueva THEN 1 ELSE 0 END) AS total_nuevas
     FROM 
         donadora_detalles dd
+    WHERE 
+        EXTRACT(YEAR FROM dd.fecha) = EXTRACT(YEAR FROM CURRENT_DATE)  -- Filter for current year
     GROUP BY 
         TO_CHAR(dd.fecha, 'TMMonth YYYY'),
         CASE 
