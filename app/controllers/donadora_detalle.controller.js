@@ -717,10 +717,10 @@ exports.getStats = async (req, res) => {
     const { fecha_inicio, fecha_fin } = req.query;
     let dateCondition = '';
 
-    // Si se proporcionan fechas, añadir condición
-    if (fecha_inicio && fecha_fin) {
-      dateCondition = `WHERE fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'`;
-    }
+   if (fecha_inicio && fecha_fin) {
+   dateCondition = `WHERE fecha BETWEEN '${fecha_inicio} 00:00:00' AND '${fecha_fin} 23:59:59'`;
+  }
+
 
     // Consulta para obtener estadísticas generales
     const statsQuery = `
@@ -737,15 +737,15 @@ exports.getStats = async (req, res) => {
       SELECT COUNT(DISTINCT id_donadora) as total_nuevas
       FROM donadora_detalles
       WHERE nueva = true
-      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'` : ''}
-    `;
+      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio} 00:00:00' AND '${fecha_fin} 23:59:59'` : ''}
+      `;
 
     const constantesQuery = `
       SELECT COUNT(DISTINCT id_donadora) as total_constantes
       FROM donadora_detalles
       WHERE constante = true
-      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio}' AND '${fecha_fin}'` : ''}
-    `;
+      ${fecha_inicio && fecha_fin ? `AND fecha BETWEEN '${fecha_inicio} 00:00:00' AND '${fecha_fin} 23:59:59'` : ''}
+      `;
 
     // Consulta para obtener litros, donadoras, donaciones, nuevas y constantes por servicio extrahospitalario
     const servicioExQuery = `
